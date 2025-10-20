@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { MetaMaskProvider } from "@/contexts/MetaMaskContext";
 import { WalletConnectButton } from "@/components/wallet-connect-button";
 import { ConnectionStatus } from "@/components/connection-status";
 import { useToast } from "@/hooks/use-toast";
@@ -243,59 +244,54 @@ export default function App() {
     }
   };
 
-  if (!smartAccount) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <LandingPage onConnect={handleConnect} isConnecting={isConnecting} />
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
-
   const sidebarStyle = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-          <div className="flex h-screen w-full">
-            <AppSidebar />
-            <div className="flex flex-col flex-1 overflow-hidden">
-              <header className="flex items-center justify-between p-4 border-b">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <ConnectionStatus
-                    isConnected={isConnected}
-                    isIndexing={isIndexing}
-                  />
+    <MetaMaskProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          {!smartAccount ? (
+            <LandingPage onSmartAccountCreated={setSmartAccount} />
+          ) : (
+            <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+              <div className="flex h-screen w-full">
+                <AppSidebar />
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <header className="flex items-center justify-between p-4 border-b">
+                    <div className="flex items-center gap-4">
+                      <SidebarTrigger data-testid="button-sidebar-toggle" />
+                      <ConnectionStatus
+                        isConnected={isConnected}
+                        isIndexing={isIndexing}
+                      />
+                    </div>
+                    <WalletConnectButton
+                      smartAccount={smartAccount}
+                      onConnect={handleConnect}
+                      onDisconnect={handleDisconnect}
+                      isConnecting={isConnecting}
+                    />
+                  </header>
+                  <main className="flex-1 overflow-auto p-6">
+                    <div className="max-w-7xl mx-auto">
+                      <Router
+                        smartAccount={smartAccount}
+                        onRevoke={handleRevoke}
+                        onIgnore={handleIgnore}
+                        onWhitelist={handleWhitelist}
+                      />
+                    </div>
+                  </main>
                 </div>
-                <WalletConnectButton
-                  smartAccount={smartAccount}
-                  onConnect={handleConnect}
-                  onDisconnect={handleDisconnect}
-                  isConnecting={isConnecting}
-                />
-              </header>
-              <main className="flex-1 overflow-auto p-6">
-                <div className="max-w-7xl mx-auto">
-                  <Router
-                    smartAccount={smartAccount}
-                    onRevoke={handleRevoke}
-                    onIgnore={handleIgnore}
-                    onWhitelist={handleWhitelist}
-                  />
-                </div>
-              </main>
-            </div>
-          </div>
-        </SidebarProvider>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+              </div>
+            </SidebarProvider>
+          )}
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </MetaMaskProvider>
   );
 }

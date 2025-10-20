@@ -1,13 +1,13 @@
 import { Shield, Zap, Brain, Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { WalletConnectButtonReal } from "@/components/wallet-connect-button-real";
+import type { SmartAccount } from "@shared/schema";
 
 interface LandingPageProps {
-  onConnect: () => void;
-  isConnecting?: boolean;
+  onSmartAccountCreated: (account: SmartAccount) => void;
 }
 
-export default function LandingPage({ onConnect, isConnecting }: LandingPageProps) {
+export default function LandingPage({ onSmartAccountCreated }: LandingPageProps) {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b">
@@ -21,14 +21,7 @@ export default function LandingPage({ onConnect, isConnecting }: LandingPageProp
               <p className="text-xs text-muted-foreground">AI-Powered Security</p>
             </div>
           </div>
-          <Button
-            onClick={onConnect}
-            disabled={isConnecting}
-            size="default"
-            data-testid="button-connect-hero"
-          >
-            {isConnecting ? "Connecting..." : "Get Started"}
-          </Button>
+          <WalletConnectButtonReal onSmartAccountCreated={onSmartAccountCreated} />
         </div>
       </header>
 
@@ -48,23 +41,9 @@ export default function LandingPage({ onConnect, isConnecting }: LandingPageProp
               Real-time monitoring and automated approval management for your MetaMask Smart Account on Monad testnet. Let AI guard your assets 24/7.
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <Button
-                size="lg"
-                onClick={onConnect}
-                disabled={isConnecting}
-                data-testid="button-connect-main"
-              >
-                <Shield className="h-5 w-5 mr-2" />
-                {isConnecting ? "Connecting..." : "Connect Smart Account"}
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => window.open("https://docs.metamask.io/delegation-toolkit/", "_blank")}
-                data-testid="button-learn-more"
-              >
-                Learn More
-              </Button>
+              <div className="flex-1 max-w-md">
+                <WalletConnectButtonReal onSmartAccountCreated={onSmartAccountCreated} />
+              </div>
             </div>
           </div>
         </section>

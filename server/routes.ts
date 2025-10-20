@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { analyzeRisk } from "./ai-risk-analyzer";
+import { smartAccountService } from "./smart-account-service";
 import type {
   InsertSmartAccount,
   InsertRiskEvent,
@@ -16,7 +17,8 @@ const wsClients = new Map<string, Set<WebSocket>>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Smart Account Routes
-  app.post("/api/smart-account/connect", async (req, res) => {
+  // New endpoint for real smart account creation with Delegation Toolkit
+  app.post("/api/smart-account/create", async (req, res) => {
     try {
       const { ownerAddress } = req.body;
 
@@ -24,17 +26,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Owner address required" });
       }
 
-      // Generate a smart account address (in production, use MetaMask Delegation Toolkit)
-      // Create a full 40-character hex string for a valid EVM address
-      const randomHex = Array.from({ length: 40 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
-      const smartAccountAddress = "0x" + randomHex;
+      // Create real smart account using Delegation Toolkit
+      const smartAccountData = await smartAccountService.createSmartAccount({
+        ownerAddress,
+      });
 
       const account = await storage.createSmartAccount({
-        address: smartAccountAddress,
-        ownerAddress,
-        balance: "5.0", // Demo balance
+        address: smartAccountData.address,
+        ownerAddress: smartAccountData.ownerAddress,
+        balance: smartAccountData.balance,
         network: "monad-testnet",
       });
 
