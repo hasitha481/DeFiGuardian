@@ -4,6 +4,8 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { analyzeRisk } from "./ai-risk-analyzer";
 import { smartAccountService } from "./smart-account-service";
+import { transactionService } from "./transaction-service";
+import type { Address } from "viem";
 import type {
   InsertSmartAccount,
   InsertRiskEvent,
@@ -154,21 +156,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if auto-revoke is enabled and threshold exceeded
       if (
         settings?.autoRevokeEnabled &&
-        riskAnalysis.score > (settings.riskThreshold || 70)
+        riskAnalysis.score > (settings.riskThreshold || 70) &&
+        spenderAddress // Must have spender address for revocation
       ) {
-        // Simulate auto-revoke
-        await storage.updateRiskEventStatus(event.id, "revoked");
-        
-        await storage.createAuditLog({
-          accountAddress,
-          action: "revoke_approval",
-          eventId: event.id,
-          status: "success",
-          details: { reason: "Auto-revoked due to high risk score", riskScore: riskAnalysis.score },
-          txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
-        });
+        try {
+          // Execute real blockchain transaction to auto-revoke approval
+          const revokeResult = await transactionService.revokeApproval({
+            tokenAddress: tokenAddress as Address,
+            spenderAddress: spenderAddress as Address,
+            ownerAddress: accountAddress as Address,
+          });
 
-        event.status = "revoked";
+          await storage.updateRiskEventStatus(event.id, "revoked");
+          
+          await storage.createAuditLog({
+            accountAddress,
+            action: "revoke_approval",
+            eventId: event.id,
+            status: revokeResult.status === "confirmed" ? "success" : "pending",
+            details: {
+              reason: "Auto-revoked due to high risk score",
+              riskScore: riskAnalysis.score,
+              gasUsed: revokeResult.gasUsed?.toString(),
+              blockNumber: revokeResult.blockNumber?.toString(),
+            },
+            txHash: revokeResult.txHash,
+          });
+
+          event.status = "revoked";
+        } catch (autoRevokeError) {
+          console.error("Auto-revoke failed:", autoRevokeError);
+          // Don't fail the entire request if auto-revoke fails
+          await storage.createAuditLog({
+            accountAddress,
+            action: "revoke_approval",
+            eventId: event.id,
+            status: "failed",
+            details: {
+              reason: "Auto-revoke attempted but failed",
+              error: autoRevokeError instanceof Error ? autoRevokeError.message : "Unknown error",
+            },
+          });
+        }
       }
 
       // Broadcast to WebSocket clients
@@ -192,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Revoke approval
+  // Revoke approval - Real blockchain transaction
   app.post("/api/events/revoke", async (req, res) => {
     try {
       const { eventId } = req.body;
@@ -202,15 +231,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
+      if (!event.spenderAddress) {
+        return res.status(400).json({ error: "Event missing spender address" });
+      }
+
+      // Execute real blockchain transaction to revoke approval
+      const revokeResult = await transactionService.revokeApproval({
+        tokenAddress: event.tokenAddress as Address,
+        spenderAddress: event.spenderAddress as Address,
+        ownerAddress: event.accountAddress as Address,
+      });
+
+      // Update event status
       await storage.updateRiskEventStatus(eventId, "revoked");
 
+      // Create audit log with real transaction hash
       await storage.createAuditLog({
         accountAddress: event.accountAddress,
         action: "revoke_approval",
         eventId,
-        status: "success",
-        details: { manual: true },
-        txHash: "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        status: revokeResult.status === "confirmed" ? "success" : "pending",
+        details: {
+          manual: true,
+          gasUsed: revokeResult.gasUsed?.toString(),
+          blockNumber: revokeResult.blockNumber?.toString(),
+        },
+        txHash: revokeResult.txHash,
       });
 
       // Broadcast update
@@ -218,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (clients) {
         const message = JSON.stringify({
           type: "event_updated",
-          data: { eventId, status: "revoked" },
+          data: { eventId, status: "revoked", txHash: revokeResult.txHash },
         });
         clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
@@ -227,10 +273,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      return res.json({ success: true });
+      return res.json({
+        success: true,
+        txHash: revokeResult.txHash,
+        status: revokeResult.status,
+      });
     } catch (error) {
       console.error("Revoke error:", error);
-      return res.status(500).json({ error: "Failed to revoke approval" });
+      
+      // Create failed audit log
+      const { eventId } = req.body;
+      const event = await storage.getRiskEvent(eventId);
+      if (event) {
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: "failed",
+          details: { error: error instanceof Error ? error.message : "Unknown error" },
+        });
+      }
+      
+      return res.status(500).json({
+        error: "Failed to revoke approval",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   });
 

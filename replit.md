@@ -183,43 +183,45 @@ Use the "Simulate Event" button to create test risk events:
 ## Real-World Integration Status
 
 ### ✅ Completed (January 2025)
-- **MetaMask SDK Integration** (@metamask/sdk-react v0.33.1)
-  - Real wallet connection with MetaMaskProvider + WalletContext
-  - Shared state across entire application
-  - Network switching to Monad testnet
-  - Account change listeners
-- **Delegation Toolkit Setup** (@metamask/delegation-toolkit)
-  - Smart account service with toMetaMaskSmartAccount()
-  - Deterministic CREATE2 salt based on owner address
-  - Correct Monad testnet RPC configuration
-  - Hybrid implementation (EOA + passkey support)
-- **Viem Integration** (v2.x)
-  - Public client for reading blockchain state
-  - Wallet client for transaction signing (prepared)
-  - Type-safe contract interactions
-- **Monad Testnet Configuration** (Chain ID: 10143)
-  - RPC: https://testnet.monad.xyz
-  - Explorer: https://explorer.testnet.monad.xyz
-  - Native currency: MON
-- **Real Wallet Connection Flow**
-  - Landing page → MetaMask connection → Smart account creation
-  - WalletContext propagates state to all components
-  - Dashboard shows real account data
+**Real MetaMask Wallet Integration:**
+- MetaMask SDK v0.33.1 fully integrated
+- WalletContext provides shared state across app
+- Real wallet connection with network switching to Monad testnet
+- Account change listeners
+- Landing → Dashboard transition working with real wallet data
 
-### 🚧 In Progress
-- **Smart Account On-Chain Deployment**
-  - Deterministic address generation complete
-  - Deployment requires bundler/paymaster integration (Pimlico/Stackup)
-  - UserOperation submission for gasless transactions
-- **Transaction Signing for Revocations**
-  - Viem integration prepared
-  - ERC-20 approve(spender, 0) calls
-  - Transaction status tracking
-- **Envio HyperIndex Integration**
-  - GraphQL client for event monitoring
-  - ERC-20 Approval/Transfer indexing
-  - Real-time event subscription
-  - Fallback to RPC event logs
+**Smart Account Infrastructure:**
+- Delegation Toolkit integration with toMetaMaskSmartAccount()
+- Deterministic CREATE2 address generation based on owner
+- Monad testnet RPC configuration (https://testnet.monad.xyz)
+- Hybrid implementation supporting EOA + passkey
+- Smart account creation API working
+
+**Transaction Infrastructure (Prepared):**
+- transaction-service.ts with ERC-20 helpers (getAllowance, getTokenInfo)
+- transaction-client.ts for client-side MetaMask signing
+- Proper transaction structure documented
+
+### ⚠️ Known Limitations
+**Smart Account Deployment:**
+- Accounts created but not deployed on-chain
+- Requires bundler/paymaster integration (Pimlico/Stackup)
+- UserOperation submission needed for deployment
+
+**Approval Revocations:**
+- Infrastructure in place but using mock transactions
+- Real revocations require user wallet signing
+- Cannot revoke from service account (msg.sender issue)
+- **Next Steps for Real Revocations:**
+  1. Add /api/events/prepare-revoke endpoint
+  2. Wire transaction-client.ts into UI components
+  3. Implement user signature flow via MetaMask
+  4. Accept client-signed tx hash in backend
+
+**Event Monitoring:**
+- Currently using simulated events
+- Envio HyperIndex integration pending
+- Real blockchain event monitoring not implemented
 
 ### Known Limitations
 - In-memory storage (data resets on server restart)
