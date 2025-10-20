@@ -54,8 +54,11 @@ export class MemStorage implements IStorage {
   ): Promise<SmartAccount> {
     const id = randomUUID();
     const account: SmartAccount = {
-      ...insertAccount,
       id,
+      address: insertAccount.address,
+      ownerAddress: insertAccount.ownerAddress,
+      balance: insertAccount.balance || "0",
+      network: insertAccount.network || "monad-testnet",
       createdAt: new Date(),
     };
     this.smartAccounts.set(account.address, account);
@@ -87,8 +90,19 @@ export class MemStorage implements IStorage {
   async createRiskEvent(insertEvent: InsertRiskEvent): Promise<RiskEvent> {
     const id = randomUUID();
     const event: RiskEvent = {
-      ...insertEvent,
       id,
+      accountAddress: insertEvent.accountAddress,
+      eventType: insertEvent.eventType,
+      tokenAddress: insertEvent.tokenAddress,
+      tokenSymbol: insertEvent.tokenSymbol ?? null,
+      spenderAddress: insertEvent.spenderAddress ?? null,
+      amount: insertEvent.amount,
+      riskScore: insertEvent.riskScore,
+      riskLevel: insertEvent.riskLevel,
+      aiReasoning: insertEvent.aiReasoning ?? null,
+      txHash: insertEvent.txHash,
+      blockNumber: insertEvent.blockNumber,
+      status: insertEvent.status || "detected",
       timestamp: new Date(),
     };
     this.riskEvents.set(id, event);
@@ -116,8 +130,12 @@ export class MemStorage implements IStorage {
     const existing = this.userSettings.get(insertSettings.accountAddress);
     const id = existing?.id || randomUUID();
     const settings: UserSettings = {
-      ...insertSettings,
       id,
+      accountAddress: insertSettings.accountAddress,
+      riskThreshold: insertSettings.riskThreshold ?? 70,
+      autoRevokeEnabled: insertSettings.autoRevokeEnabled ?? false,
+      whitelistedAddresses: insertSettings.whitelistedAddresses ?? [],
+      notificationsEnabled: insertSettings.notificationsEnabled ?? true,
       updatedAt: new Date(),
     };
     this.userSettings.set(settings.accountAddress, settings);
@@ -134,8 +152,13 @@ export class MemStorage implements IStorage {
   async createAuditLog(insertLog: InsertAuditLog): Promise<AuditLog> {
     const id = randomUUID();
     const log: AuditLog = {
-      ...insertLog,
       id,
+      accountAddress: insertLog.accountAddress,
+      action: insertLog.action,
+      status: insertLog.status,
+      eventId: insertLog.eventId ?? null,
+      txHash: insertLog.txHash ?? null,
+      details: insertLog.details ?? {},
       timestamp: new Date(),
     };
     this.auditLogs.set(id, log);

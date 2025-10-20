@@ -6,10 +6,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MetaMaskProvider } from "@/contexts/MetaMaskContext";
-import { WalletConnectButton } from "@/components/wallet-connect-button";
+import { WalletProvider, useWallet } from "@/contexts/WalletContext";
 import { ConnectionStatus } from "@/components/connection-status";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 import LandingPage from "@/pages/landing";
 import DashboardPage from "@/pages/dashboard";
 import ActivityPage from "@/pages/activity";
@@ -62,10 +64,9 @@ function Router({
   );
 }
 
-export default function App() {
+function AppContent() {
   const { toast } = useToast();
-  const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const { smartAccount, disconnect } = useWallet();
   const [isConnected, setIsConnected] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
 
@@ -96,7 +97,6 @@ export default function App() {
         setIsIndexing(true);
         setTimeout(() => setIsIndexing(false), 2000);
         
-        // Invalidate queries to refetch data
         queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       } else if (message.type === "event_updated") {
@@ -114,48 +114,11 @@ export default function App() {
     };
   }, [smartAccount, toast]);
 
-  const handleConnect = async () => {
-    setIsConnecting(true);
-    
-    try {
-      // Simulate smart account creation/connection
-      // In production, this would use MetaMask Delegation Toolkit SDK
-      const response = await fetch("/api/smart-account/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ownerAddress: "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to connect");
-      }
-
-      const account = await response.json();
-      setSmartAccount(account);
-      
-      toast({
-        title: "Smart Account Connected",
-        description: "Your DeFi Guardian is now active and monitoring.",
-      });
-    } catch (error) {
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect smart account. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
   const handleDisconnect = () => {
-    setSmartAccount(null);
-    setIsConnected(false);
+    disconnect();
     toast({
       title: "Disconnected",
-      description: "Smart account has been disconnected.",
+      description: "MetaMask wallet has been disconnected.",
     });
   };
 
@@ -244,54 +207,80 @@ export default function App() {
     }
   };
 
+  if (!smartAccount) {
+    return <LandingPage onSmartAccountCreated={() => {
+      toast({
+        title: "Smart Account Created",
+        description: "Your DeFi Guardian is now active and monitoring!",
+      });
+    }} />;
+  }
+
   const sidebarStyle = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 
   return (
-    <MetaMaskProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          {!smartAccount ? (
-            <LandingPage onSmartAccountCreated={setSmartAccount} />
-          ) : (
-            <SidebarProvider style={sidebarStyle as React.CSSProperties}>
-              <div className="flex h-screen w-full">
-                <AppSidebar />
-                <div className="flex flex-col flex-1 overflow-hidden">
-                  <header className="flex items-center justify-between p-4 border-b">
-                    <div className="flex items-center gap-4">
-                      <SidebarTrigger data-testid="button-sidebar-toggle" />
-                      <ConnectionStatus
-                        isConnected={isConnected}
-                        isIndexing={isIndexing}
-                      />
-                    </div>
-                    <WalletConnectButton
-                      smartAccount={smartAccount}
-                      onConnect={handleConnect}
-                      onDisconnect={handleDisconnect}
-                      isConnecting={isConnecting}
-                    />
-                  </header>
-                  <main className="flex-1 overflow-auto p-6">
-                    <div className="max-w-7xl mx-auto">
-                      <Router
-                        smartAccount={smartAccount}
-                        onRevoke={handleRevoke}
-                        onIgnore={handleIgnore}
-                        onWhitelist={handleWhitelist}
-                      />
-                    </div>
-                  </main>
+    <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <ConnectionStatus
+                isConnected={isConnected}
+                isIndexing={isIndexing}
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-sm">
+                <div className="font-mono text-xs text-muted-foreground">
+                  {smartAccount.address.slice(0, 6)}...{smartAccount.address.slice(-4)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {smartAccount.balance} MON
                 </div>
               </div>
-            </SidebarProvider>
-          )}
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnect}
+                data-testid="button-disconnect"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Disconnect
+              </Button>
+            </div>
+          </header>
+          <main className="flex-1 overflow-auto p-6">
+            <div className="max-w-7xl mx-auto">
+              <Router
+                smartAccount={smartAccount}
+                onRevoke={handleRevoke}
+                onIgnore={handleIgnore}
+                onWhitelist={handleWhitelist}
+              />
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <MetaMaskProvider>
+      <WalletProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <AppContent />
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </WalletProvider>
     </MetaMaskProvider>
   );
 }

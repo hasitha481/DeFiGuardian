@@ -17,7 +17,7 @@ const wsClients = new Map<string, Set<WebSocket>>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Smart Account Routes
-  // New endpoint for real smart account creation with Delegation Toolkit
+  // Real smart account creation with Delegation Toolkit
   app.post("/api/smart-account/create", async (req, res) => {
     try {
       const { ownerAddress } = req.body;
@@ -25,6 +25,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!ownerAddress) {
         return res.status(400).json({ error: "Owner address required" });
       }
+
+      // Note: In production, implement proper owner-to-account lookup
+      // For now, proceed with creating deterministic smart account
 
       // Create real smart account using Delegation Toolkit
       const smartAccountData = await smartAccountService.createSmartAccount({

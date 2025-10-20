@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Wallet, Loader2, AlertTriangle } from "lucide-react";
-import { useWallet } from "@/hooks/useWallet";
+import { useWallet } from "@/contexts/WalletContext";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import {
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/alert";
 
 interface WalletConnectButtonRealProps {
-  onSmartAccountCreated?: (account: any) => void;
+  onSmartAccountCreated?: () => void;
 }
 
 export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnectButtonRealProps) {
@@ -70,14 +70,14 @@ export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnect
           description: "Setting up your MetaMask smart account with delegation capabilities...",
         });
         
-        const newSmartAccount = await createSmartAccount(account);
+        await createSmartAccount(account);
         
         toast({
           title: "Smart Account Created",
           description: "Your DeFi Guardian is now active and monitoring!",
         });
         
-        onSmartAccountCreated?.(newSmartAccount);
+        onSmartAccountCreated?.();
       }
     } catch (error: any) {
       console.error("Connection error:", error);

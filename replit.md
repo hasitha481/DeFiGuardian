@@ -180,11 +180,27 @@ Use the "Simulate Event" button to create test risk events:
 - Community whitelist sharing
 - Governance features
 
-## Known Limitations (MVP)
-- Simulated blockchain events (no real Envio indexing)
-- Mock smart account creation (MetaMask SDK integration pending)
+## Real-World Integration Status
+
+### ✅ Completed
+- MetaMask SDK Integration (@metamask/sdk-react v0.33.1)
+- Delegation Toolkit Setup (@metamask/delegation-toolkit)
+- Viem for blockchain interactions
+- Monad Testnet Configuration (Chain ID: 10143)
+- Real wallet connection flow with network switching
+- Smart account service infrastructure
+
+### 🚧 In Progress
+- Real blockchain transaction signing for revocations
+- Envio HyperIndex integration for event monitoring
+- Gasless transaction bundler configuration
+- On-chain smart account deployment
+
+### Known Limitations
 - In-memory storage (data resets on server restart)
-- Single account support (no multi-account switching)
+- Requires MetaMask browser extension
+- Monad testnet RPC and infrastructure required for full functionality
+- Development mode includes graceful fallbacks for testing
 
 ## Resources
 - [MetaMask Delegation Toolkit](https://docs.metamask.io/delegation-toolkit/)

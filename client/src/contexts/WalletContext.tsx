@@ -1,34 +1,47 @@
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useSDK } from "@metamask/sdk-react";
-import { useCallback, useEffect, useState } from "react";
 import { monadTestnet } from "@/lib/chains";
 import type { SmartAccount } from "@shared/schema";
 
-export function useWallet() {
+interface WalletContextValue {
+  // MetaMask SDK state
+  connected: boolean;
+  connecting: boolean;
+  account: string | undefined;
+  chainId: string | undefined;
+  isCorrectChain: boolean;
+  provider: any;
+  
+  // Smart account state (shared across all components)
+  smartAccount: SmartAccount | null;
+  isCreatingSmartAccount: boolean;
+  
+  // Actions
+  connect: () => Promise<string>;
+  disconnect: () => void;
+  switchToMonad: () => Promise<void>;
+  createSmartAccount: (ownerAddress: string) => Promise<SmartAccount>;
+  setSmartAccount: (account: SmartAccount | null) => void;
+}
+
+const WalletContext = createContext<WalletContextValue | null>(null);
+
+export function WalletProvider({ children }: { children: ReactNode }) {
   const { sdk, connected, connecting, provider, chainId, account } = useSDK();
   const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null);
   const [isCreatingSmartAccount, setIsCreatingSmartAccount] = useState(false);
 
-  // Check if connected to Monad testnet
   const isCorrectChain = chainId === `0x${monadTestnet.id.toString(16)}`;
 
   const connect = useCallback(async () => {
-    try {
-      if (!sdk) {
-        throw new Error("SDK not initialized");
-      }
-
-      // Connect to MetaMask
-      const accounts = await sdk.connect();
-      
-      if (!accounts || accounts.length === 0) {
-        throw new Error("No accounts found");
-      }
-
-      return accounts[0];
-    } catch (error) {
-      console.error("Failed to connect:", error);
-      throw error;
+    if (!sdk) {
+      throw new Error("SDK not initialized");
     }
+    const accounts = await sdk.connect();
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts found");
+    }
+    return accounts[0];
   }, [sdk]);
 
   const switchToMonad = useCallback(async () => {
@@ -37,13 +50,11 @@ export function useWallet() {
     }
 
     try {
-      // Try to switch to Monad testnet
       await provider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${monadTestnet.id.toString(16)}` }],
       });
     } catch (switchError: any) {
-      // Chain doesn't exist, add it
       if (switchError.code === 4902) {
         await provider.request({
           method: "wallet_addEthereumChain",
@@ -63,11 +74,10 @@ export function useWallet() {
     }
   }, [provider]);
 
-  const createSmartAccount = useCallback(async (ownerAddress: string) => {
+  const createSmartAccountFn = useCallback(async (ownerAddress: string) => {
     setIsCreatingSmartAccount(true);
     
     try {
-      // Call backend to create/register smart account with Delegation Toolkit
       const response = await fetch("/api/smart-account/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +118,6 @@ export function useWallet() {
     };
 
     const handleChainChanged = () => {
-      // Reload on chain change for safety
       window.location.reload();
     };
 
@@ -121,25 +130,33 @@ export function useWallet() {
     };
   }, [provider]);
 
-  return {
-    // Connection state
+  const value: WalletContextValue = {
     connected,
     connecting,
     account,
     chainId,
     isCorrectChain,
-    
-    // Smart account
+    provider,
     smartAccount,
     isCreatingSmartAccount,
-    
-    // Actions
     connect,
     disconnect,
     switchToMonad,
-    createSmartAccount,
-    
-    // Provider for transactions
-    provider,
+    createSmartAccount: createSmartAccountFn,
+    setSmartAccount,
   };
+
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+    </WalletContext.Provider>
+  );
+}
+
+export function useWallet() {
+  const context = useContext(WalletContext);
+  if (!context) {
+    throw new Error("useWallet must be used within WalletProvider");
+  }
+  return context;
 }
