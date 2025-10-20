@@ -25,16 +25,16 @@ export default function LandingPage({ onSmartAccountCreated }: LandingPageProps)
       </header>
 
       <main className="flex-1">
-        <section className="py-20 px-4">
+        <section className="py-20 px-4 bg-gradient-to-b from-primary/5 to-background">
           <div className="container mx-auto max-w-4xl text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm mb-6 shadow-sm">
               <Zap className="h-4 w-4" />
               Powered by MetaMask Smart Accounts & AI
             </div>
             <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
               Protect Your DeFi Assets with
               <br />
-              <span className="text-primary">AI-Powered Risk Analysis</span>
+              <span className="text-primary bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">AI-Powered Risk Analysis</span>
             </h2>
             <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto">
               Real-time monitoring and automated approval management for your MetaMask Smart Account on Monad testnet. Let AI guard your assets 24/7.

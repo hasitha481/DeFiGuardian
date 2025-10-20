@@ -112,7 +112,7 @@ export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnect
           onClick={handleFullConnect}
           disabled={isProcessing}
           size="lg"
-          className="w-full"
+          className="w-full shadow-md"
           data-testid="button-switch-network"
         >
           {isProcessing ? (
@@ -138,7 +138,7 @@ export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnect
       onClick={handleFullConnect}
       disabled={isLoading}
       size="lg"
-      className="w-full"
+      className="w-full shadow-md"
       data-testid="button-wallet-connect"
     >
       {isLoading ? (
