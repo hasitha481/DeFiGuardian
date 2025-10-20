@@ -3,28 +3,299 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { WalletConnectButton } from "@/components/wallet-connect-button";
+import { ConnectionStatus } from "@/components/connection-status";
+import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+import LandingPage from "@/pages/landing";
+import DashboardPage from "@/pages/dashboard";
+import ActivityPage from "@/pages/activity";
+import SettingsPage from "@/pages/settings";
+import AuditPage from "@/pages/audit";
 import NotFound from "@/pages/not-found";
+import type { SmartAccount } from "@shared/schema";
 
-function Router() {
+function Router({
+  smartAccount,
+  onRevoke,
+  onIgnore,
+  onWhitelist,
+}: {
+  smartAccount: SmartAccount | null;
+  onRevoke: (eventId: string) => void;
+  onIgnore: (eventId: string) => void;
+  onWhitelist: (address: string) => void;
+}) {
+  if (!smartAccount) {
+    return null;
+  }
+
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/">
+        <DashboardPage
+          smartAccountAddress={smartAccount.address}
+          onRevoke={onRevoke}
+          onIgnore={onIgnore}
+          onWhitelist={onWhitelist}
+        />
+      </Route>
+      <Route path="/activity">
+        <ActivityPage
+          smartAccountAddress={smartAccount.address}
+          onRevoke={onRevoke}
+          onIgnore={onIgnore}
+          onWhitelist={onWhitelist}
+        />
+      </Route>
+      <Route path="/settings">
+        <SettingsPage smartAccountAddress={smartAccount.address} />
+      </Route>
+      <Route path="/audit">
+        <AuditPage smartAccountAddress={smartAccount.address} />
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-function App() {
+export default function App() {
+  const { toast } = useToast();
+  const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    if (!smartAccount) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      setIsConnected(true);
+      socket.send(JSON.stringify({
+        type: "subscribe",
+        accountAddress: smartAccount.address,
+      }));
+    };
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      if (message.type === "new_event") {
+        toast({
+          title: "New Risk Event Detected",
+          description: `${message.data.eventType} detected with risk score ${message.data.riskScore}`,
+        });
+        setIsIndexing(true);
+        setTimeout(() => setIsIndexing(false), 2000);
+        
+        // Invalidate queries to refetch data
+        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      } else if (message.type === "event_updated") {
+        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+      }
+    };
+
+    socket.onclose = () => {
+      setIsConnected(false);
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [smartAccount, toast]);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    
+    try {
+      // Simulate smart account creation/connection
+      // In production, this would use MetaMask Delegation Toolkit SDK
+      const response = await fetch("/api/smart-account/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerAddress: "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(""),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to connect");
+      }
+
+      const account = await response.json();
+      setSmartAccount(account);
+      
+      toast({
+        title: "Smart Account Connected",
+        description: "Your DeFi Guardian is now active and monitoring.",
+      });
+    } catch (error) {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect smart account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = () => {
+    setSmartAccount(null);
+    setIsConnected(false);
+    toast({
+      title: "Disconnected",
+      description: "Smart account has been disconnected.",
+    });
+  };
+
+  const handleRevoke = async (eventId: string) => {
+    try {
+      const response = await fetch("/api/events/revoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to revoke");
+      }
+
+      toast({
+        title: "Approval Revoked",
+        description: "The risky approval has been revoked successfully.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+    } catch (error) {
+      toast({
+        title: "Revocation Failed",
+        description: "Failed to revoke approval. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleIgnore = async (eventId: string) => {
+    try {
+      const response = await fetch("/api/events/ignore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to ignore");
+      }
+
+      toast({
+        title: "Event Ignored",
+        description: "This event will no longer trigger alerts.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+    } catch (error) {
+      toast({
+        title: "Action Failed",
+        description: "Failed to ignore event. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleWhitelist = async (address: string) => {
+    try {
+      const response = await fetch("/api/settings/whitelist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountAddress: smartAccount?.address,
+          contractAddress: address,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to whitelist");
+      }
+
+      toast({
+        title: "Address Whitelisted",
+        description: "This contract has been added to your trusted list.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+    } catch (error) {
+      toast({
+        title: "Whitelist Failed",
+        description: "Failed to whitelist address. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (!smartAccount) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <LandingPage onConnect={handleConnect} isConnecting={isConnecting} />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  const sidebarStyle = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <SidebarProvider style={sidebarStyle as React.CSSProperties}>
+          <div className="flex h-screen w-full">
+            <AppSidebar />
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <header className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center gap-4">
+                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  <ConnectionStatus
+                    isConnected={isConnected}
+                    isIndexing={isIndexing}
+                  />
+                </div>
+                <WalletConnectButton
+                  smartAccount={smartAccount}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
+                  isConnecting={isConnecting}
+                />
+              </header>
+              <main className="flex-1 overflow-auto p-6">
+                <div className="max-w-7xl mx-auto">
+                  <Router
+                    smartAccount={smartAccount}
+                    onRevoke={handleRevoke}
+                    onIgnore={handleIgnore}
+                    onWhitelist={handleWhitelist}
+                  />
+                </div>
+              </main>
+            </div>
+          </div>
+        </SidebarProvider>
         <Toaster />
-        <Router />
       </TooltipProvider>
     </QueryClientProvider>
   );
 }
-
-export default App;
