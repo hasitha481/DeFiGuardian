@@ -197,26 +197,26 @@ Use the "Simulate Event" button to create test risk events:
 - Hybrid implementation supporting EOA + passkey
 - Smart account creation API working
 
-**Transaction Infrastructure (Prepared):**
+**Transaction Infrastructure (Completed):**
 - transaction-service.ts with ERC-20 helpers (getAllowance, getTokenInfo)
 - transaction-client.ts for client-side MetaMask signing
 - Proper transaction structure documented
+- **Real token approval revocations with on-chain verification**
+
+**Real Approval Revocations (✅ Completed 2025-10-20):**
+- User wallet signing via MetaMask integration
+- `/api/events/revoke-confirm` endpoint with multi-layer verification
+- On-chain transaction status verification
+- Allowance verification (confirms allowance=0)
+- Complete audit trail with block numbers
+- Security-hardened: prevents fake transaction submissions
+- Error handling: surfaces RPC failures instead of masking them
 
 ### ⚠️ Known Limitations
 **Smart Account Deployment:**
 - Accounts created but not deployed on-chain
 - Requires bundler/paymaster integration (Pimlico/Stackup)
 - UserOperation submission needed for deployment
-
-**Approval Revocations:**
-- Infrastructure in place but using mock transactions
-- Real revocations require user wallet signing
-- Cannot revoke from service account (msg.sender issue)
-- **Next Steps for Real Revocations:**
-  1. Add /api/events/prepare-revoke endpoint
-  2. Wire transaction-client.ts into UI components
-  3. Implement user signature flow via MetaMask
-  4. Accept client-signed tx hash in backend
 
 **Event Monitoring:**
 - Currently using simulated events
@@ -290,20 +290,19 @@ Requirements:
 - AI risk analysis (OpenAI GPT-5)
 - WebSocket real-time updates
 - UI/UX components
+- **Token approval revocations with on-chain verification (as of 2025-10-20)**
 
-⚠️ **Using Mock Data**:
-- Token approval revocations (requires user wallet signing - Task 3b)
-- Blockchain event monitoring (using simulated events)
+⚠️ **Using Simulated Data**:
+- Blockchain event monitoring (using simulated events via "Simulate Event" button)
 
 ⚠️ **Requires External Deployment**:
 - Envio HyperIndex indexer (configured, needs deployment to hosted service)
 - On-chain smart account deployment (requires bundler/paymaster)
 
-❌ **Using Mock/Simulated Data**:
-- Blockchain event monitoring (Envio indexer not deployed)
-- Token approval revocations (requires user wallet signing)
-
 ## Recent Changes (2025-10-20)
+- ✅ **Real token approval revocations** with user wallet signing via MetaMask
+- ✅ **On-chain verification** before accepting revocations (transaction status + allowance checks)
+- ✅ **Security hardening** to prevent fake transaction submissions
 - ✅ Fixed smart account creation (toMetaMaskSmartAccount signer parameter - walletClient)
 - ✅ Updated Monad testnet RPC URL (https://testnet-rpc.monad.xyz)
 - ✅ Enhanced UI styling (gradient buttons, improved hero section, better visual hierarchy)

@@ -2,7 +2,7 @@
 
 ## 🎯 Quick Summary
 
-**Status**: 85% Production-Ready | Competition-Ready Demo
+**Status**: 90% Production-Ready | Competition-Ready Demo
 
 This is an **AI-Powered DeFi Security dApp** built for the MetaMask Smart Accounts x Monad Hackathon. It monitors your DeFi assets in real-time and automatically protects you from risky token approvals using AI.
 
@@ -62,6 +62,21 @@ This is an **AI-Powered DeFi Security dApp** built for the MetaMask Smart Accoun
 - **Export to JSON** - compliance-ready logs
 - **Searchable records** - find specific events
 
+### 7. **Real Token Approval Revocations** ✅ (NEW! 2025-10-20)
+- **Real MetaMask wallet signing** for revocations
+- **On-chain transaction verification** before confirming success
+- **Allowance verification** - confirms approval actually revoked (allowance=0)
+- **Security hardened** - prevents fake transaction submissions
+- **Complete audit trail** with block numbers
+
+**How It Works:**
+1. Click "Revoke" on high-risk event
+2. MetaMask popup appears for transaction signing
+3. Sign transaction with your wallet
+4. Backend verifies transaction on-chain
+5. Confirms allowance is zero before marking as revoked
+6. Audit log updated with block number
+
 ---
 
 ## ⚠️ What's SIMULATED (Mock Data for Demo)
@@ -72,13 +87,7 @@ This is an **AI-Powered DeFi Security dApp** built for the MetaMask Smart Accoun
 - **Impact**: Events are created via "Simulate Event" button instead of real blockchain
 - **Production Path**: Deploy Envio indexer (30 min) → Real blockchain event stream
 
-### 2. **Token Approval Revocations** ⚠️
-- **Current**: Using mock transactions
-- **Why**: Requires user wallet signing via MetaMask
-- **Impact**: Revoke button works but doesn't send real on-chain transaction
-- **Production Path**: Implement user signature flow (15 min) → Real revocations
-
-### 3. **Smart Account On-Chain Deployment** ⚠️
+### 2. **Smart Account On-Chain Deployment** ⚠️
 - **Current**: CREATE2 address predicted but not deployed to blockchain
 - **Why**: Requires bundler/paymaster infrastructure
 - **Impact**: Account exists logically but not physically on Monad testnet yet
@@ -118,9 +127,15 @@ This is an **AI-Powered DeFi Security dApp** built for the MetaMask Smart Accoun
     - AI reasoning shown ("High-value approval to unknown spender...")
     - Event card displays with orange/red risk badge
 13. **Show Actions**:
-    - "Revoke" button (would execute gasless revoke in production)
+    - **"Revoke" button** - **NEW! Triggers real MetaMask signature for on-chain revocation**
     - "Ignore" button (dismiss alert)
     - "Whitelist" button (trust this address)
+14. **Demo Real Revocation** (Optional - requires testnet funds):
+    - Click "Revoke" button
+    - MetaMask popup appears
+    - Sign transaction
+    - Backend verifies on-chain
+    - Event marked as "Revoked" with block number
 
 #### **Part 4: Settings & Automation (1 min)**
 14. Navigate to **Settings** page
@@ -258,7 +273,7 @@ Total time: ~2 hours to go fully production-ready."
 ✅ **Working Demo**: Can demonstrate end-to-end flow with simulated events  
 
 **Judge-Ready**: Yes, can demo all core features
-**Production-Ready**: 85% (Envio deployment + user signing = 100%)
+**Production-Ready**: 90% (Envio deployment = 100%)
 
 ---
 
@@ -273,14 +288,7 @@ pnpm envio deploy
 ```
 **Result**: Real blockchain event monitoring
 
-### **Phase 2: Implement User Wallet Signing** (15 minutes)
-- Wire `transaction-client.ts` into revoke button
-- Show MetaMask signature popup
-- Submit signed transaction to blockchain
-
-**Result**: Real approval revocations
-
-### **Phase 3: Bundler Integration** (Optional, 1-2 hours)
+### **Phase 2: Bundler Integration** (Optional, 1-2 hours)
 - Sign up for Pimlico or Stackup
 - Deploy smart accounts on-chain
 - Enable true gasless transactions
@@ -301,7 +309,10 @@ A: YES! Click "Simulate Event" and watch it work in 2-3 seconds. It's using Open
 A: The Envio indexer is configured but needs external deployment (requires Envio account signup). This is a 30-minute step outside the Replit environment.
 
 **Q: Can this protect my real funds?**  
-A: The infrastructure is ready. With Envio deployment + user signing implementation, this becomes a fully production-ready security tool.
+A: YES! Real revocations are now working. Click "Revoke" on any event and sign with MetaMask. The system verifies the transaction on-chain before confirming. With Envio deployment for event monitoring, this becomes fully production-ready.
+
+**Q: How do real revocations work?**  
+A: When you click "Revoke", MetaMask pops up for you to sign a real blockchain transaction. After you sign, the backend verifies the transaction succeeded on-chain and confirms the allowance is zero before marking it as revoked. Everything is verified - no trust required!
 
 **Q: How does auto-revoke work if accounts aren't deployed on-chain?**  
 A: Currently simulated for demo. With bundler integration, it would use gasless UserOperations to revoke approvals without requiring gas from users.
