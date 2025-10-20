@@ -1,0 +1,30 @@
+type Transfer @entity {
+  id: ID!
+  from: String!
+  to: String!
+  value: BigInt!
+  blockNumber: Int!
+  timestamp: Int!
+  transactionHash: String!
+  logIndex: Int!
+}
+
+type Approval @entity {
+  id: ID!
+  owner: String!
+  spender: String!
+  value: BigInt!
+  blockNumber: Int!
+  timestamp: Int!
+  transactionHash: String!
+  logIndex: Int!
+}
+
+type TokenHolder @entity {
+  id: ID!
+  address: String!
+  balance: BigInt!
+  approvalCount: Int!
+  transferCount: Int!
+  lastActivityTimestamp: Int!
+}

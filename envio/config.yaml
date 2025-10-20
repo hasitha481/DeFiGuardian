@@ -1,0 +1,22 @@
+name: defi-guardian-monad-indexer
+description: Index ERC-20 Approval and Transfer events on Monad testnet for DeFi Guardian Agent
+
+# Note: This config uses wildcard indexing to monitor ALL ERC-20 tokens on Monad testnet
+# For production, specify exact contract addresses to reduce indexing scope
+
+networks:
+  - id: 10143                    # Monad testnet chain ID
+    start_block: 0               # HyperSync auto-detects deployment block
+    rpc_config:
+      url: https://testnet-rpc.monad.xyz  # Monad testnet RPC endpoint
+    contracts:
+      - name: ERC20
+        abi_file_path: ./abis/erc20.json  # Standard ERC-20 ABI (create this file)
+        address:
+          # Add specific token addresses here, or use wildcard for all ERC-20s
+          # Example: 0x1234567890abcdef1234567890abcdef12345678
+          - "*"  # Wildcard to index all ERC-20 tokens (filter in handlers)
+        handler: src/EventHandlers.ts
+        events:
+          - event: "Transfer(address indexed from, address indexed to, uint256 value)"
+          - event: "Approval(address indexed owner, address indexed spender, uint256 value)"

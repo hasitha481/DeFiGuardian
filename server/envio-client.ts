@@ -1,0 +1,220 @@
+/**
+ * Envio HyperSync Client for DeFi Guardian Agent
+ * 
+ * Integrates with Envio HyperIndex to fetch real-time blockchain events
+ * from Monad testnet using HyperSync's ultra-fast API.
+ * 
+ * This client queries:
+ * - ERC-20 Approval events (for risk analysis)
+ * - ERC-20 Transfer events (for monitoring)
+ */
+
+import HyperSync from "@envio-dev/hypersync-client";
+import { monadTestnet } from "../client/src/lib/chains";
+
+// Envio HyperSync endpoint for Monad testnet
+// Note: Replace with actual Envio GraphQL endpoint once indexer is deployed
+const ENVIO_GRAPHQL_ENDPOINT = process.env.ENVIO_GRAPHQL_ENDPOINT || 
+  "https://indexer.envio.dev/v1/graphql";  // Placeholder
+
+// ERC-20 event signatures
+const ERC20_APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+const ERC20_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+export interface ApprovalEvent {
+  owner: string;
+  spender: string;
+  value: bigint;
+  blockNumber: number;
+  timestamp: number;
+  transactionHash: string;
+  logIndex: number;
+  tokenAddress: string;
+}
+
+export interface TransferEvent {
+  from: string;
+  to: string;
+  value: bigint;
+  blockNumber: number;
+  timestamp: number;
+  transactionHash: string;
+  logIndex: number;
+  tokenAddress: string;
+}
+
+/**
+ * Envio HyperSync Client Service
+ * Provides methods to query blockchain events from Envio indexer
+ */
+export class EnvioClient {
+  private client: typeof HyperSync | null = null;
+
+  constructor() {
+    // Initialize HyperSync client with Monad testnet endpoint
+    try {
+      this.client = HyperSync;
+      console.log("Envio HyperSync client initialized for Monad testnet");
+    } catch (error) {
+      console.error("Failed to initialize Envio client:", error);
+    }
+  }
+
+  /**
+   * Fetch recent approval events for a specific address
+   * Used for real-time monitoring of risky approvals
+   */
+  async getRecentApprovals(
+    accountAddress: string,
+    limit: number = 10
+  ): Promise<ApprovalEvent[]> {
+    try {
+      // GraphQL query for recent approvals
+      const query = `
+        query GetRecentApprovals($owner: String!, $limit: Int!) {
+          Approval(
+            where: { owner: { _eq: $owner } }
+            limit: $limit
+            order_by: { timestamp: desc }
+          ) {
+            id
+            owner
+            spender
+            value
+            blockNumber
+            timestamp
+            transactionHash
+            logIndex
+          }
+        }
+      `;
+
+      const variables = {
+        owner: accountAddress.toLowerCase(),
+        limit,
+      };
+
+      // Note: In production, this would query the actual Envio GraphQL endpoint
+      // For now, returning mock data to demonstrate integration structure
+      console.log(`[Envio] Querying approvals for ${accountAddress} (limit: ${limit})`);
+      
+      // Mock response for demonstration (replace with actual GraphQL query)
+      return this.getMockApprovals(accountAddress, limit);
+    } catch (error) {
+      console.error("Error fetching approvals from Envio:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch recent transfer events for a specific address
+   * Used for monitoring account activity
+   */
+  async getRecentTransfers(
+    accountAddress: string,
+    limit: number = 10
+  ): Promise<TransferEvent[]> {
+    try {
+      const query = `
+        query GetRecentTransfers($address: String!, $limit: Int!) {
+          Transfer(
+            where: {
+              _or: [
+                { from: { _eq: $address } },
+                { to: { _eq: $address } }
+              ]
+            }
+            limit: $limit
+            order_by: { timestamp: desc }
+          ) {
+            id
+            from
+            to
+            value
+            blockNumber
+            timestamp
+            transactionHash
+            logIndex
+          }
+        }
+      `;
+
+      const variables = {
+        address: accountAddress.toLowerCase(),
+        limit,
+      };
+
+      console.log(`[Envio] Querying transfers for ${accountAddress} (limit: ${limit})`);
+      
+      // Mock response for demonstration (replace with actual GraphQL query)
+      return this.getMockTransfers(accountAddress, limit);
+    } catch (error) {
+      console.error("Error fetching transfers from Envio:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Monitor new events in real-time using HyperSync streaming
+   * This would connect to Envio's real-time event stream
+   */
+  async subscribeToEvents(
+    accountAddress: string,
+    onApproval: (event: ApprovalEvent) => void,
+    onTransfer: (event: TransferEvent) => void
+  ): Promise<void> {
+    console.log(`[Envio] Subscribing to real-time events for ${accountAddress}`);
+    
+    // In production, this would use GraphQL subscriptions or WebSocket
+    // For now, implementing polling as a fallback
+    const pollInterval = 5000; // 5 seconds
+    
+    setInterval(async () => {
+      const approvals = await this.getRecentApprovals(accountAddress, 5);
+      approvals.forEach(onApproval);
+      
+      const transfers = await this.getRecentTransfers(accountAddress, 5);
+      transfers.forEach(onTransfer);
+    }, pollInterval);
+  }
+
+  /**
+   * Mock data generators for demonstration
+   * In production, these would be replaced with actual Envio GraphQL queries
+   */
+  private getMockApprovals(accountAddress: string, limit: number): ApprovalEvent[] {
+    // Return empty array - actual data would come from Envio GraphQL endpoint
+    return [];
+  }
+
+  private getMockTransfers(accountAddress: string, limit: number): TransferEvent[] {
+    // Return empty array - actual data would come from Envio GraphQL endpoint
+    return [];
+  }
+}
+
+// Singleton instance
+export const envioClient = new EnvioClient();
+
+/**
+ * Integration Notes:
+ * 
+ * 1. SETUP: Deploy the Envio indexer (see /envio directory)
+ *    - Run: pnpm envio deploy
+ *    - Get GraphQL endpoint URL
+ *    - Set ENVIO_GRAPHQL_ENDPOINT environment variable
+ * 
+ * 2. QUERIES: Use the GraphQL endpoint to fetch events
+ *    - See /envio/README.md for example queries
+ *    - The indexer provides Transfer and Approval entities
+ *    - Supports filtering, ordering, and pagination
+ * 
+ * 3. REAL-TIME: Can use GraphQL subscriptions for live events
+ *    - Alternative: Poll the API at regular intervals
+ *    - HyperSync provides <1s latency for new events
+ * 
+ * 4. AI INTEGRATION: Connect Envio events to OpenAI risk analysis
+ *    - Fetch approval events from Envio
+ *    - Pass to AI service for risk scoring
+ *    - Trigger auto-revoke if score exceeds threshold
+ */
