@@ -122,6 +122,7 @@ export class TransactionService {
 
   /**
    * Check current allowance for a token
+   * THROWS on error - caller must handle failures
    */
   async getAllowance(
     tokenAddress: Address,
@@ -136,10 +137,17 @@ export class TransactionService {
         args: [ownerAddress, spenderAddress],
       });
 
+      console.log(`Allowance for ${tokenAddress}: ${allowance}`);
       return allowance;
     } catch (error) {
       console.error("Error checking allowance:", error);
-      return BigInt(0);
+      // CRITICAL: Throw error instead of returning 0
+      // This prevents verification bypass on RPC failures
+      throw new Error(
+        `Failed to read allowance from blockchain: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 

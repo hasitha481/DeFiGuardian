@@ -18,7 +18,9 @@ import ActivityPage from "@/pages/activity";
 import SettingsPage from "@/pages/settings";
 import AuditPage from "@/pages/audit";
 import NotFound from "@/pages/not-found";
+import { transactionClient } from "@/lib/transaction-client";
 import type { SmartAccount } from "@shared/schema";
+import type { Address } from "viem";
 
 function Router({
   smartAccount,
@@ -144,28 +146,61 @@ function AppContent() {
   };
 
   const handleRevoke = async (eventId: string) => {
+    if (!smartAccount) return;
+
     try {
-      const response = await fetch("/api/events/revoke", {
+      // First, get the event details to extract token and spender addresses
+      const eventsResponse = await fetch(`/api/events/${smartAccount.address}`);
+      const events = await eventsResponse.json();
+      const event = events.find((e: any) => e.id === eventId);
+
+      if (!event || !event.tokenAddress || !event.spenderAddress) {
+        throw new Error("Event not found or missing required addresses");
+      }
+
+      toast({
+        title: "Signature Required",
+        description: "Please confirm the revocation transaction in MetaMask...",
+      });
+
+      // Execute real blockchain transaction using user's MetaMask wallet
+      const revokeResult = await transactionClient.revokeApproval({
+        tokenAddress: event.tokenAddress as Address,
+        spenderAddress: event.spenderAddress as Address,
+        ownerAddress: smartAccount.address as Address,
+      });
+
+      // Update backend with transaction hash
+      const response = await fetch("/api/events/revoke-confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId }),
+        body: JSON.stringify({
+          eventId,
+          txHash: revokeResult.txHash,
+          status: revokeResult.status,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to revoke");
+        throw new Error("Failed to update revocation status");
       }
 
       toast({
         title: "Approval Revoked",
-        description: "The risky approval has been revoked successfully.",
+        description: `Transaction confirmed! Hash: ${revokeResult.txHash.slice(0, 10)}...`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     } catch (error) {
+      console.error("Revocation error:", error);
       toast({
         title: "Revocation Failed",
-        description: "Failed to revoke approval. Please try again.",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to revoke approval. Please try again.",
         variant: "destructive",
       });
     }

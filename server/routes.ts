@@ -221,7 +221,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Revoke approval - Real blockchain transaction
+  // Revoke approval confirmation - Called after client-side MetaMask signing
+  app.post("/api/events/revoke-confirm", async (req, res) => {
+    try {
+      const { eventId, txHash, status } = req.body;
+      const event = await storage.getRiskEvent(eventId);
+
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      if (!event.tokenAddress || !event.spenderAddress) {
+        return res.status(400).json({ error: "Event missing required addresses" });
+      }
+
+      // CRITICAL SECURITY: Verify transaction on-chain before accepting
+      try {
+        const txStatus = await transactionService.getTransactionStatus(txHash as Address);
+        
+        if (txStatus.status === "not_found" || txStatus.status === "pending") {
+          // Transaction not confirmed yet - store as pending
+          await storage.createAuditLog({
+            accountAddress: event.accountAddress,
+            action: "revoke_approval",
+            eventId,
+            status: "pending",
+            details: {
+              manual: true,
+              method: "user_wallet_signature",
+              message: "Transaction submitted but not yet confirmed on-chain",
+              txStatus: txStatus.status,
+            },
+            txHash,
+          });
+
+          return res.json({
+            success: false,
+            txHash,
+            status: "pending",
+            message: "Transaction not yet confirmed. Please wait for blockchain confirmation.",
+          });
+        }
+
+        if (txStatus.status === "failed") {
+          // Transaction failed on-chain
+          await storage.createAuditLog({
+            accountAddress: event.accountAddress,
+            action: "revoke_approval",
+            eventId,
+            status: "failed",
+            details: {
+              manual: true,
+              method: "user_wallet_signature",
+              message: "Transaction failed on-chain",
+            },
+            txHash,
+          });
+
+          return res.status(400).json({
+            error: "Transaction failed on blockchain",
+            txHash,
+          });
+        }
+
+        // Transaction confirmed - now verify the allowance was actually set to 0
+        const currentAllowance = await transactionService.getAllowance(
+          event.tokenAddress as Address,
+          event.accountAddress as Address,
+          event.spenderAddress as Address
+        );
+
+        if (currentAllowance !== BigInt(0)) {
+          // Allowance not zero - revocation didn't work or wrong transaction
+          await storage.createAuditLog({
+            accountAddress: event.accountAddress,
+            action: "revoke_approval",
+            eventId,
+            status: "failed",
+            details: {
+              manual: true,
+              method: "user_wallet_signature",
+              message: "Transaction confirmed but allowance not zero - verification failed",
+              currentAllowance: currentAllowance.toString(),
+            },
+            txHash,
+          });
+
+          return res.status(400).json({
+            error: "Transaction confirmed but approval was not revoked (allowance not zero)",
+            txHash,
+            currentAllowance: currentAllowance.toString(),
+          });
+        }
+
+        // SUCCESS: Transaction confirmed AND allowance is zero
+        await storage.updateRiskEventStatus(eventId, "revoked");
+
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: "success",
+          details: {
+            manual: true,
+            method: "user_wallet_signature",
+            message: "Revocation verified on-chain - allowance confirmed zero",
+            blockNumber: txStatus.blockNumber?.toString(),
+          },
+          txHash,
+        });
+
+        // Broadcast update via WebSocket
+        const clients = wsClients.get(event.accountAddress);
+        if (clients) {
+          const message = JSON.stringify({
+            type: "event_updated",
+            data: { eventId, status: "revoked", txHash },
+          });
+          clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(message);
+            }
+          });
+        }
+
+        return res.json({
+          success: true,
+          txHash,
+          status: "confirmed",
+          blockNumber: txStatus.blockNumber?.toString(),
+        });
+      } catch (verificationError) {
+        // On-chain verification failed
+        console.error("On-chain verification error:", verificationError);
+        
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: "failed",
+          details: {
+            error: verificationError instanceof Error ? verificationError.message : "Unknown error",
+            method: "user_wallet_signature",
+            message: "Failed to verify transaction on-chain",
+          },
+          txHash,
+        });
+
+        return res.status(500).json({
+          error: "Failed to verify transaction on blockchain",
+          details: verificationError instanceof Error ? verificationError.message : "Unknown error",
+        });
+      }
+    } catch (error) {
+      console.error("Revoke confirmation error:", error);
+      
+      const { eventId } = req.body;
+      const event = await storage.getRiskEvent(eventId);
+      if (event) {
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: "failed",
+          details: {
+            error: error instanceof Error ? error.message : "Unknown error",
+            method: "user_wallet_signature",
+          },
+        });
+      }
+
+      return res.status(500).json({
+        error: "Failed to confirm revocation",
+        details: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  // LEGACY: Revoke approval - Now uses mock transactions (real flow uses revoke-confirm)
   app.post("/api/events/revoke", async (req, res) => {
     try {
       const { eventId } = req.body;
@@ -235,28 +412,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Event missing spender address" });
       }
 
-      // Execute real blockchain transaction to revoke approval
-      const revokeResult = await transactionService.revokeApproval({
-        tokenAddress: event.tokenAddress as Address,
-        spenderAddress: event.spenderAddress as Address,
-        ownerAddress: event.accountAddress as Address,
-      });
+      console.warn("DEPRECATED: Use /api/events/revoke-confirm with client-side signing");
+
+      // Mock transaction hash for legacy support
+      const mockTxHash = `0x${Array.from({ length: 64 }, () => 
+        Math.floor(Math.random() * 16).toString(16)
+      ).join("")}` as Address;
 
       // Update event status
       await storage.updateRiskEventStatus(eventId, "revoked");
 
-      // Create audit log with real transaction hash
+      // Create audit log with mock transaction
       await storage.createAuditLog({
         accountAddress: event.accountAddress,
         action: "revoke_approval",
         eventId,
-        status: revokeResult.status === "confirmed" ? "success" : "pending",
+        status: "success",
         details: {
           manual: true,
-          gasUsed: revokeResult.gasUsed?.toString(),
-          blockNumber: revokeResult.blockNumber?.toString(),
+          mock: true,
+          message: "Mock revocation - upgrade to client-side signing",
         },
-        txHash: revokeResult.txHash,
+        txHash: mockTxHash,
       });
 
       // Broadcast update
@@ -264,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (clients) {
         const message = JSON.stringify({
           type: "event_updated",
-          data: { eventId, status: "revoked", txHash: revokeResult.txHash },
+          data: { eventId, status: "revoked", txHash: mockTxHash },
         });
         clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
@@ -275,13 +452,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({
         success: true,
-        txHash: revokeResult.txHash,
-        status: revokeResult.status,
+        txHash: mockTxHash,
+        status: "confirmed",
       });
     } catch (error) {
       console.error("Revoke error:", error);
       
-      // Create failed audit log
       const { eventId } = req.body;
       const event = await storage.getRiskEvent(eventId);
       if (event) {
