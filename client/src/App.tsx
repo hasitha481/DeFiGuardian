@@ -2,7 +2,7 @@ import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { MetaMaskProvider } from "@/contexts/MetaMaskContext";
@@ -11,7 +11,7 @@ import { ConnectionStatus } from "@/components/connection-status";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, Copy, Check } from "lucide-react";
 import LandingPage from "@/pages/landing";
 import DashboardPage from "@/pages/dashboard";
 import ActivityPage from "@/pages/activity";
@@ -69,6 +69,7 @@ function AppContent() {
   const { smartAccount, disconnect } = useWallet();
   const [isConnected, setIsConnected] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -120,6 +121,26 @@ function AppContent() {
       title: "Disconnected",
       description: "MetaMask wallet has been disconnected.",
     });
+  };
+
+  const handleCopyAddress = async () => {
+    if (!smartAccount) return;
+    
+    try {
+      await navigator.clipboard.writeText(smartAccount.address);
+      setCopiedAddress(true);
+      toast({
+        title: "Address Copied",
+        description: "Smart account address copied to clipboard",
+      });
+      setTimeout(() => setCopiedAddress(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy address. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRevoke = async (eventId: string) => {
@@ -235,13 +256,35 @@ function AppContent() {
               />
             </div>
             <div className="flex items-center gap-4">
-              <div className="text-sm">
-                <div className="font-mono text-xs text-muted-foreground">
-                  {smartAccount.address.slice(0, 6)}...{smartAccount.address.slice(-4)}
+              <div className="flex items-center gap-2">
+                <div className="text-sm">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="font-mono text-xs text-muted-foreground cursor-help">
+                        {smartAccount.address.slice(0, 6)}...{smartAccount.address.slice(-4)}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-mono text-xs">{smartAccount.address}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <div className="text-xs text-muted-foreground">
+                    {smartAccount.balance} MON
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {smartAccount.balance} MON
-                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleCopyAddress}
+                  data-testid="button-copy-address"
+                >
+                  {copiedAddress ? (
+                    <Check className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                </Button>
               </div>
               <Button
                 variant="outline"
