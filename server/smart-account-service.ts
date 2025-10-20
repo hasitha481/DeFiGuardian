@@ -1,12 +1,12 @@
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, createWalletClient, http, type Address, keccak256, encodePacked } from "viem";
 import { monadTestnet } from "../client/src/lib/chains";
 import { Implementation, toMetaMaskSmartAccount } from "@metamask/delegation-toolkit";
 import { privateKeyToAccount } from "viem/accounts";
 
-// Configuration for Monad testnet
+// Configuration for Monad testnet with explicit RPC URL
 const publicClient = createPublicClient({
   chain: monadTestnet,
-  transport: http(),
+  transport: http(monadTestnet.rpcUrls.default.http[0]),
 });
 
 // Service account for delegation operations (in production, manage this securely)
@@ -27,13 +27,26 @@ interface SmartAccountResult {
 export class SmartAccountService {
   /**
    * Creates a MetaMask smart account for the owner address using Delegation Toolkit
+   * Uses deterministic CREATE2 salt for stable addresses
    */
   async createSmartAccount(params: CreateSmartAccountParams): Promise<SmartAccountResult> {
     try {
       const { ownerAddress } = params;
 
+      // Generate deterministic salt based on owner address (CREATE2 pattern)
+      const deterministicSalt = keccak256(
+        encodePacked(['address'], [ownerAddress])
+      );
+
       // Create service signer for deployment
       const serviceAccount = privateKeyToAccount(SERVICE_PRIVATE_KEY as `0x${string}`);
+
+      // Create wallet client for deployment transactions
+      const walletClient = createWalletClient({
+        account: serviceAccount,
+        chain: monadTestnet,
+        transport: http(monadTestnet.rpcUrls.default.http[0]),
+      });
 
       // Create MetaMask smart account using Delegation Toolkit
       const smartAccount = await toMetaMaskSmartAccount({
@@ -41,19 +54,28 @@ export class SmartAccountService {
         implementation: Implementation.Hybrid,
         deployParams: [
           ownerAddress,  // Owner address
-          [],            // Initial guardians
-          [],            // Initial delegates
-          [],            // Initial caveats
+          [],            // Initial guardians (for passkey support)
+          [],            // Initial public key X coordinates
+          [],            // Initial public key Y coordinates
         ],
-        deploySalt: `0x${Date.now().toString(16).padStart(64, '0')}`, // Unique salt
-        signer: { account: serviceAccount },
+        deploySalt: deterministicSalt, // Deterministic salt based on owner
+        signatory: { account: serviceAccount },
       });
 
-      // Check if account is deployed
-      const code = await publicClient.getBytecode({ 
-        address: smartAccount.address as Address,
-      });
-      const isDeployed = code !== undefined && code !== '0x';
+      // Check if account is already deployed
+      let isDeployed = await this.isAccountDeployed(smartAccount.address as Address);
+
+      // Deploy smart account on-chain if not already deployed
+      if (!isDeployed) {
+        try {
+          // Note: Real deployment would require calling smartAccount.deploy()
+          // or sending a UserOperation through a bundler
+          // For MVP, we mark as not deployed and show deterministic address
+          console.log(`Smart account ${smartAccount.address} created (not yet deployed on-chain)`);
+        } catch (deployError) {
+          console.warn("Smart account deployment skipped (requires bundler):", deployError);
+        }
+      }
 
       // Get balance
       const balance = await publicClient.getBalance({ 
@@ -67,34 +89,9 @@ export class SmartAccountService {
         isDeployed,
       };
     } catch (error) {
-      console.error("Error creating smart account:", error);
-      
-      // Fallback: return a deterministic address based on owner
-      // In production, you'd handle this more gracefully
-      const deterministicAddress = await this.getDeterministicAddress(params.ownerAddress);
-      
-      return {
-        address: deterministicAddress,
-        ownerAddress: params.ownerAddress,
-        balance: "0",
-        isDeployed: false,
-      };
+      console.error("Error creating smart account with Delegation Toolkit:", error);
+      throw new Error(`Failed to create smart account: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  }
-
-  /**
-   * Get deterministic smart account address for an owner
-   * Uses CREATE2 logic to predict the address before deployment
-   */
-  private async getDeterministicAddress(ownerAddress: Address): Promise<string> {
-    // Simple deterministic address generation
-    // In production, use proper CREATE2 calculation
-    const hash = ownerAddress.toLowerCase();
-    const suffix = Array.from({ length: 8 }, (_, i) => 
-      ((i + parseInt(hash.slice(2 + i, 3 + i), 16)) % 16).toString(16)
-    ).join("");
-    
-    return `0x${hash.slice(2, 34)}${suffix}`;
   }
 
   /**

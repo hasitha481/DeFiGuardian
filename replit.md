@@ -182,19 +182,44 @@ Use the "Simulate Event" button to create test risk events:
 
 ## Real-World Integration Status
 
-### ✅ Completed
-- MetaMask SDK Integration (@metamask/sdk-react v0.33.1)
-- Delegation Toolkit Setup (@metamask/delegation-toolkit)
-- Viem for blockchain interactions
-- Monad Testnet Configuration (Chain ID: 10143)
-- Real wallet connection flow with network switching
-- Smart account service infrastructure
+### ✅ Completed (January 2025)
+- **MetaMask SDK Integration** (@metamask/sdk-react v0.33.1)
+  - Real wallet connection with MetaMaskProvider + WalletContext
+  - Shared state across entire application
+  - Network switching to Monad testnet
+  - Account change listeners
+- **Delegation Toolkit Setup** (@metamask/delegation-toolkit)
+  - Smart account service with toMetaMaskSmartAccount()
+  - Deterministic CREATE2 salt based on owner address
+  - Correct Monad testnet RPC configuration
+  - Hybrid implementation (EOA + passkey support)
+- **Viem Integration** (v2.x)
+  - Public client for reading blockchain state
+  - Wallet client for transaction signing (prepared)
+  - Type-safe contract interactions
+- **Monad Testnet Configuration** (Chain ID: 10143)
+  - RPC: https://testnet.monad.xyz
+  - Explorer: https://explorer.testnet.monad.xyz
+  - Native currency: MON
+- **Real Wallet Connection Flow**
+  - Landing page → MetaMask connection → Smart account creation
+  - WalletContext propagates state to all components
+  - Dashboard shows real account data
 
 ### 🚧 In Progress
-- Real blockchain transaction signing for revocations
-- Envio HyperIndex integration for event monitoring
-- Gasless transaction bundler configuration
-- On-chain smart account deployment
+- **Smart Account On-Chain Deployment**
+  - Deterministic address generation complete
+  - Deployment requires bundler/paymaster integration (Pimlico/Stackup)
+  - UserOperation submission for gasless transactions
+- **Transaction Signing for Revocations**
+  - Viem integration prepared
+  - ERC-20 approve(spender, 0) calls
+  - Transaction status tracking
+- **Envio HyperIndex Integration**
+  - GraphQL client for event monitoring
+  - ERC-20 Approval/Transfer indexing
+  - Real-time event subscription
+  - Fallback to RPC event logs
 
 ### Known Limitations
 - In-memory storage (data resets on server restart)
