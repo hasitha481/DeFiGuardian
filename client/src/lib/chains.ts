@@ -11,10 +11,10 @@ export const monadTestnet = defineChain({
   },
   rpcUrls: {
     default: {
-      http: ["https://testnet.monad.xyz"],
+      http: ["https://testnet-rpc.monad.xyz"],
     },
     public: {
-      http: ["https://testnet.monad.xyz"],
+      http: ["https://testnet-rpc.monad.xyz"],
     },
   },
   blockExplorers: {

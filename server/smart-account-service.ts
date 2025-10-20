@@ -49,18 +49,18 @@ export class SmartAccountService {
       });
 
       // Create MetaMask smart account using Delegation Toolkit
-      // This predicts the smart account address using CREATE2
+      // Uses deterministic CREATE2 to predict the smart account address
       const smartAccount = await toMetaMaskSmartAccount({
         client: publicClient,
         implementation: Implementation.Hybrid,
         deployParams: [
           ownerAddress,  // Owner address
-          [],            // Initial guardians (for passkey support)
-          [],            // Initial public key X coordinates
-          [],            // Initial public key Y coordinates
+          [],            // Initial guardians (empty for EOA-only)
+          [],            // Initial public key X coordinates (empty for EOA-only)
+          [],            // Initial public key Y coordinates (empty for EOA-only)
         ],
         deploySalt: deterministicSalt, // Deterministic salt based on owner
-        signer: { walletClient }, // Hybrid signer requires wallet client
+        signer: { walletClient }, // Wallet Client signer per official docs
       });
 
       // Check if account is already deployed
