@@ -316,7 +316,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
       return res.json(events);
     } catch (error) {
       console.error("Events fetch error:", error);
@@ -327,7 +328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/recent/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
       return res.json(events.slice(0, 5));
     } catch (error) {
       console.error("Recent events error:", error);
