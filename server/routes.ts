@@ -191,12 +191,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard Stats
+  // Start monitoring (poll RPC) for one or more addresses
+  app.post('/api/monitor/start', async (req, res) => {
+    try {
+      const { addresses } = req.body as { addresses?: string[] };
+      if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+        return res.status(400).json({ error: 'addresses[] required' });
+      }
+      const { startMonitoringAddress } = await import('./monitor-service');
+      await Promise.all(addresses.filter(Boolean).map((a) => startMonitoringAddress(a)));
+      return res.json({ success: true, monitoring: addresses.length });
+    } catch (err) {
+      console.error('monitor/start error:', err);
+      return res.status(500).json({ error: 'Failed to start monitoring' });
+    }
+  });
+
+  // Dashboard Stats (supports comma-separated addresses)
   app.get("/api/dashboard/stats/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
-      const settings = await storage.getUserSettings(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
+
+      // Use settings of the first address for whitelisted count
+      const settings = await storage.getUserSettings(addresses[0]);
 
       const stats: DashboardStats = {
         totalEvents: events.length,
