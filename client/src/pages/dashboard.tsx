@@ -23,7 +23,7 @@ export default function DashboardPage({
   onIgnore,
   onWhitelist,
 }: DashboardPageProps) {
-  const { connectedAddress } = useWallet();
+  const { account: connectedAddress } = useWallet();
   
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", smartAccountAddress],
