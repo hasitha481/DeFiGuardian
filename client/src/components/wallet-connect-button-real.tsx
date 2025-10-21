@@ -108,15 +108,18 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
         console.log("[WalletConnect] Smart account already exists or no account connected", { smartAccount, account });
       }
     } catch (error: any) {
-      console.error("Connection error:", error);
-      
+      console.error("[WalletConnect] Connection error:", error);
+      const errorMsg = error?.message || "Failed to complete setup. Please try again.";
+      console.error("[WalletConnect] Error message:", errorMsg);
+
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to complete setup. Please try again.",
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
+      console.log("[WalletConnect] Connection flow completed");
     }
   };
 
