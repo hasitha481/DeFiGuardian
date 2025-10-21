@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Activity, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { StatsCard } from "@/components/stats-card";
 import { RiskEventCard } from "@/components/risk-event-card";
