@@ -33,6 +33,27 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const isCorrectChain = chainId === `0x${monadTestnet.id.toString(16)}`;
 
+  // Select an effective injected provider if SDK provider is not available
+  const selectInjectedProvider = () => {
+    try {
+      const win = window as any;
+      if (win && win.ethereum) {
+        if (Array.isArray(win.ethereum.providers) && win.ethereum.providers.length > 0) {
+          // prefer MetaMask provider if available
+          const mm = win.ethereum.providers.find((p: any) => p.isMetaMask);
+          return mm || win.ethereum.providers[0];
+        }
+        // single provider
+        return win.ethereum;
+      }
+    } catch (err) {
+      console.warn('selectInjectedProvider error', err);
+    }
+    return undefined;
+  };
+
+  const effectiveProvider = provider || selectInjectedProvider();
+
   const connect = useCallback(async () => {
     if (!sdk) {
       throw new Error("SDK not initialized");
