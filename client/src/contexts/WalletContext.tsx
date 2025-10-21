@@ -192,6 +192,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       } catch (_) {}
 
+      // Enable auto-revoke by default for better protection (user can change in Settings)
+      try {
+        await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountAddress: account.address, autoRevokeEnabled: true }),
+        }).catch(() => {});
+      } catch (_) {}
+
       return account;
     } catch (error: any) {
       console.error("Failed to create smart account:", error);
