@@ -100,8 +100,8 @@ export class MemStorage implements IStorage {
       riskScore: insertEvent.riskScore,
       riskLevel: insertEvent.riskLevel,
       aiReasoning: insertEvent.aiReasoning ?? null,
-      txHash: insertEvent.txHash,
-      blockNumber: insertEvent.blockNumber,
+      txHash: insertEvent.txHash ?? null,
+      blockNumber: insertEvent.blockNumber ?? null,
       status: insertEvent.status || "detected",
       timestamp: new Date(),
     };
