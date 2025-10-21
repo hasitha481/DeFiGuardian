@@ -149,45 +149,28 @@ function AppContent() {
     if (!smartAccount) return;
 
     try {
-      // First, get the event details to extract token and spender addresses
-      const eventsResponse = await fetch(`/api/events/${smartAccount.address}`);
-      const events = await eventsResponse.json();
-      const event = events.find((e: any) => e.id === eventId);
-
-      if (!event || !event.tokenAddress || !event.spenderAddress) {
-        throw new Error("Event not found or missing required addresses");
-      }
-
       toast({
-        title: "Signature Required",
-        description: "Please confirm the revocation transaction in MetaMask...",
+        title: "Processing Revocation",
+        description: "Executing gasless transaction - you won't pay any gas fees!",
       });
 
-      // Execute real blockchain transaction using user's MetaMask wallet
-      const revokeResult = await transactionClient.revokeApproval({
-        tokenAddress: event.tokenAddress as Address,
-        spenderAddress: event.spenderAddress as Address,
-        ownerAddress: smartAccount.address as Address,
-      });
-
-      // Update backend with transaction hash
-      const response = await fetch("/api/events/revoke-confirm", {
+      // Execute gasless revocation via paymaster (no MetaMask signature needed!)
+      const response = await fetch("/api/events/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          txHash: revokeResult.txHash,
-          status: revokeResult.status,
-        }),
+        body: JSON.stringify({ eventId }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to update revocation status");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to revoke approval");
       }
 
+      const result = await response.json();
+
       toast({
-        title: "Approval Revoked",
-        description: `Transaction confirmed! Hash: ${revokeResult.txHash.slice(0, 10)}...`,
+        title: "Approval Revoked (Gasless!)",
+        description: `Transaction confirmed! No gas fees paid. ${result.txHash ? `Hash: ${result.txHash.slice(0, 10)}...` : ""}`,
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
