@@ -89,19 +89,23 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
 
       // Step 3: Create smart account
       if (!smartAccount && account) {
+        console.log("[WalletConnect] Creating smart account for:", account);
         toast({
           title: "Creating Smart Account",
           description: "Setting up your MetaMask smart account with delegation capabilities...",
         });
-        
+
         await createSmartAccount(account);
-        
+        console.log("[WalletConnect] Smart account created successfully");
+
         toast({
           title: "Smart Account Created",
           description: "Your DeFi Guardian is now active and monitoring!",
         });
-        
+
         onSmartAccountCreated?.();
+      } else {
+        console.log("[WalletConnect] Smart account already exists or no account connected", { smartAccount, account });
       }
     } catch (error: any) {
       console.error("Connection error:", error);
