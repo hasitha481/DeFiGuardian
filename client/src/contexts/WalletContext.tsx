@@ -58,7 +58,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     if (!sdk) {
       throw new Error("SDK not initialized");
     }
-    const accounts = await sdk.connect();
+    let accounts: string[] | undefined = undefined;
+    try {
+      accounts = await sdk.connect();
+    } catch (err) {
+      // fallback to direct provider request if SDK fails
+      const eff = selectInjectedProvider();
+      if (eff && typeof eff.request === 'function') {
+        const result = await eff.request({ method: 'eth_requestAccounts' });
+        accounts = Array.isArray(result) ? result : undefined;
+      }
+    }
+
     if (!accounts || accounts.length === 0) {
       throw new Error("No accounts found");
     }
