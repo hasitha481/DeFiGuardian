@@ -106,27 +106,48 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setSmartAccount(null);
   }, [sdk]);
 
-  // Listen for account changes
+  // Listen for account changes (guard against multiple injected providers / injection failures)
   useEffect(() => {
     if (!provider) return;
 
     const handleAccountsChanged = (...args: unknown[]) => {
-      const accounts = args[0] as string[];
-      if (accounts.length === 0) {
-        setSmartAccount(null);
+      try {
+        const accounts = args[0] as string[];
+        if (accounts.length === 0) {
+          setSmartAccount(null);
+        }
+      } catch (err) {
+        console.warn("accountsChanged handler error:", err);
       }
     };
 
     const handleChainChanged = () => {
-      window.location.reload();
+      try {
+        window.location.reload();
+      } catch (err) {
+        console.warn("chainChanged handler error:", err);
+      }
     };
 
-    provider.on("accountsChanged", handleAccountsChanged);
-    provider.on("chainChanged", handleChainChanged);
+    try {
+      // Some injected providers may throw when adding listeners; guard against it
+      if (typeof provider.on === "function") {
+        provider.on("accountsChanged", handleAccountsChanged);
+        provider.on("chainChanged", handleChainChanged);
+      }
+    } catch (err) {
+      console.warn("Failed to attach provider listeners:", err);
+    }
 
     return () => {
-      provider.removeListener("accountsChanged", handleAccountsChanged);
-      provider.removeListener("chainChanged", handleChainChanged);
+      try {
+        if (typeof provider.removeListener === "function") {
+          provider.removeListener("accountsChanged", handleAccountsChanged);
+          provider.removeListener("chainChanged", handleChainChanged);
+        }
+      } catch (err) {
+        /* ignore */
+      }
     };
   }, [provider]);
 
