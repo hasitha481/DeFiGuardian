@@ -6,6 +6,8 @@ import { analyzeRisk } from "./ai-risk-analyzer";
 import { smartAccountService } from "./smart-account-service";
 import { transactionService } from "./transaction-service";
 import type { Address } from "viem";
+import { createPublicClient, http } from 'viem';
+import { monadTestnet } from "../client/src/lib/chains";
 import type {
   InsertSmartAccount,
   InsertRiskEvent,
