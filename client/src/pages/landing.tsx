@@ -43,6 +43,10 @@ export default function LandingPage({ onSmartAccountCreated }: LandingPageProps)
               <div className="flex-1 max-w-md">
                 <WalletConnectButtonReal onSmartAccountCreated={onSmartAccountCreated} />
               </div>
+
+              <div className="flex-1 max-w-md flex items-center justify-center">
+                <OpenInNewTab />
+              </div>
             </div>
           </div>
         </section>
