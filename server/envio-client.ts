@@ -187,9 +187,46 @@ export class EnvioClient {
       };
 
       console.log(`[Envio] Querying transfers for ${accountAddress} (limit: ${limit})`);
-      
-      // Mock response for demonstration (replace with actual GraphQL query)
-      return this.getMockTransfers(accountAddress, limit);
+      if (ENVIO_GRAPHQL_ENDPOINT) {
+        // TODO: implement real GraphQL query against Envio endpoint
+        return this.getMockTransfers(accountAddress, limit);
+      }
+
+      // RPC fallback: query logs for Transfer topic involving address as from or to
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const fromBlock = Math.max(0, Number(latest) - 5000);
+        const toBlock = Number(latest);
+
+        const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+
+        // Get logs where topics[1] == addr OR topics[2] == addr by fetching both separately
+        const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] });
+        const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] });
+
+        const combined = [...logsFrom, ...logsTo].slice(0, limit);
+
+        const transfers = combined.map((log) => {
+          const from = `0x${log.topics[1].slice(26)}`;
+          const to = `0x${log.topics[2].slice(26)}`;
+          const value = BigInt(log.data);
+          return {
+            from: from.toLowerCase(),
+            to: to.toLowerCase(),
+            value,
+            blockNumber: Number(log.blockNumber),
+            timestamp: 0,
+            transactionHash: log.transactionHash,
+            logIndex: Number(log.logIndex),
+            tokenAddress: log.address,
+          };
+        });
+
+        return transfers;
+      } catch (err) {
+        console.error('RPC fallback getRecentTransfers failed:', err);
+        return [];
+      }
     } catch (error) {
       console.error("Error fetching transfers from Envio:", error);
       return [];
