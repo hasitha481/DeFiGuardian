@@ -751,6 +751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           topics: l.topics,
           data: l.data,
           logIndex: l.logIndex,
+          blockNumber: l.blockNumber,
           isTransfer: l.topics[0] === TRANSFER_TOPIC,
           isApproval: l.topics[0] === APPROVAL_TOPIC,
         };
@@ -760,7 +761,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? parsed.filter((p) => p.topics.some((t: string) => t && t.toLowerCase().includes(account.replace('0x',''))))
         : [];
 
-      return res.json({ receipt, logs: parsed, matched });
+      // Convert BigInt values to strings to avoid JSON serialization errors
+      const bigintToString = (input: any): any => {
+        if (typeof input === 'bigint') return input.toString();
+        if (Array.isArray(input)) return input.map(bigintToString);
+        if (input && typeof input === 'object') {
+          const out: any = {};
+          for (const k of Object.keys(input)) {
+            out[k] = bigintToString(input[k]);
+          }
+          return out;
+        }
+        return input;
+      };
+
+      return res.json({ receipt: bigintToString(receipt), logs: bigintToString(parsed), matched: bigintToString(matched) });
     } catch (error) {
       console.error('Debug tx endpoint error:', error);
       return res.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
