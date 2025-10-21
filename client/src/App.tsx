@@ -259,41 +259,49 @@ function AppContent() {
     if (!smartAccount) return;
 
     try {
-      toast({
-        title: "Processing Revocation",
-        description: "Executing gasless transaction - you won't pay any gas fees!",
-      });
+      toast({ title: "Processing Revocation", description: "Attempting gasless auto-revoke..." });
 
-      // Execute gasless revocation via paymaster (no MetaMask signature needed!)
       const response = await fetch("/api/events/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId }),
       });
 
-      if (!response.ok) {
+      if (response.status === 202) {
+        // Fallback: perform client-side revoke using MetaMask
+        const data = await response.json();
+        toast({ title: "Signature Required", description: "Please approve the revoke in MetaMask." });
+        const result = await transactionClient.revokeApproval({
+          tokenAddress: data.tokenAddress as Address,
+          spenderAddress: data.spenderAddress as Address,
+          ownerAddress: data.ownerAddress as Address,
+        } as any);
+
+        // Confirm on server (verifies allowance is zero)
+        await fetch("/api/events/revoke-confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId, txHash: result.txHash, status: result.status }),
+        }).catch(() => {});
+
+        toast({ title: "Approval Revoked", description: `Hash: ${result.txHash.slice(0, 10)}...` });
+      } else if (response.ok) {
+        const result = await response.json();
+        toast({ title: "Approval Revoked (Gasless)", description: `${result.txHash ? `Hash: ${result.txHash.slice(0, 10)}...` : ""}` });
+      } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to revoke approval");
       }
 
-      const result = await response.json();
-
-      toast({
-        title: "Approval Revoked (Gasless!)",
-        description: `Transaction confirmed! No gas fees paid. ${result.txHash ? `Hash: ${result.txHash.slice(0, 10)}...` : ""}`,
-      });
-
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     } catch (error) {
       console.error("Revocation error:", error);
       toast({
         title: "Revocation Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to revoke approval. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to revoke approval.",
         variant: "destructive",
       });
     }
