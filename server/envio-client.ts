@@ -100,12 +100,48 @@ export class EnvioClient {
         limit,
       };
 
-      // Note: In production, this would query the actual Envio GraphQL endpoint
-      // For now, returning mock data to demonstrate integration structure
+      // If ENVIO_GRAPHQL_ENDPOINT is configured we would query it. Otherwise use RPC fallback
       console.log(`[Envio] Querying approvals for ${accountAddress} (limit: ${limit})`);
-      
-      // Mock response for demonstration (replace with actual GraphQL query)
-      return this.getMockApprovals(accountAddress, limit);
+      if (ENVIO_GRAPHQL_ENDPOINT) {
+        // TODO: implement real GraphQL query against Envio endpoint
+        return this.getMockApprovals(accountAddress, limit);
+      }
+
+      // RPC fallback: query logs for Approval topic and filter by owner address
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const fromBlock = Math.max(0, Number(latest) - 5000);
+        const toBlock = Number(latest);
+
+        const ownerTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+
+        const logs = await publicClient.getLogs({
+          fromBlock,
+          toBlock,
+          topics: [ERC20_APPROVAL_TOPIC, ownerTopic],
+        });
+
+        const approvals = logs.slice(0, limit).map((log) => {
+          const owner = `0x${log.topics[1].slice(26)}`;
+          const spender = `0x${log.topics[2].slice(26)}`;
+          const value = BigInt(log.data);
+          return {
+            owner: owner.toLowerCase(),
+            spender: spender.toLowerCase(),
+            value,
+            blockNumber: Number(log.blockNumber),
+            timestamp: 0, // RPC logs don't include timestamp; resolve if needed
+            transactionHash: log.transactionHash,
+            logIndex: Number(log.logIndex),
+            tokenAddress: log.address,
+          };
+        });
+
+        return approvals;
+      } catch (err) {
+        console.error('RPC fallback getRecentApprovals failed:', err);
+        return [];
+      }
     } catch (error) {
       console.error("Error fetching approvals from Envio:", error);
       return [];
