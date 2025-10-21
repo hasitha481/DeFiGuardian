@@ -109,9 +109,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check rate limit
       if (!checkRateLimit(ownerAddress)) {
-        return res.status(429).json({ 
-          error: "Rate limit exceeded. Please wait before deploying again." 
+        return res.status(429).json({
+          error: "Rate limit exceeded. Please wait before deploying again."
         });
+      }
+
+      // If account already exists in storage assume deployed and return 409
+      const existing = await storage.getSmartAccount(smartAccountAddress.toLowerCase());
+      if (existing) {
+        return res.status(409).json({ error: "Smart account is already deployed on-chain" });
       }
 
       // Deploy smart account to Monad testnet
@@ -120,14 +126,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ownerAddress: ownerAddress as Address,
       });
 
-      // Update account status in storage
+      // Update account status in storage (create only if not exists)
       const updatedBalance = await smartAccountService.getBalance(smartAccountAddress as Address);
-      await storage.createSmartAccount({
-        address: smartAccountAddress,
-        ownerAddress,
-        balance: updatedBalance,
-        network: "monad-testnet",
-      });
+      try {
+        await storage.createSmartAccount({
+          address: smartAccountAddress,
+          ownerAddress,
+          balance: updatedBalance,
+          network: "monad-testnet",
+        });
+      } catch (e) {
+        // If storage already has it, ignore
+        console.warn("createSmartAccount storage warning:", e);
+      }
 
       // Create audit log for deployment
       await storage.createAuditLog({
