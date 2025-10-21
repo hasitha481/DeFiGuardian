@@ -9,8 +9,8 @@ const publicClient = createPublicClient({
   transport: http(monadTestnet.rpcUrls.default.http[0]),
 });
 
-// Service account for delegation operations (in production, manage this securely)
-const SERVICE_PRIVATE_KEY = process.env.SERVICE_ACCOUNT_KEY || 
+// Deployer account - pays gas fees for smart account deployments on Monad testnet
+const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || 
   "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
 
 interface CreateSmartAccountParams {
@@ -22,6 +22,18 @@ interface SmartAccountResult {
   ownerAddress: string;
   balance: string;
   isDeployed: boolean;
+}
+
+interface DeploySmartAccountParams {
+  smartAccountAddress: Address;
+  ownerAddress: Address;
+}
+
+interface DeploymentResult {
+  txHash: string;
+  blockNumber: string;
+  status: "success" | "failed";
+  gasUsed?: string;
 }
 
 export class SmartAccountService {
@@ -38,12 +50,12 @@ export class SmartAccountService {
         encodePacked(['address'], [ownerAddress])
       );
 
-      // Create service signer for deployment
-      const serviceAccount = privateKeyToAccount(SERVICE_PRIVATE_KEY as `0x${string}`);
+      // Create deployer signer for creating smart account reference
+      const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
-      // Create wallet client for deployment transactions
+      // Create wallet client for creating smart account reference
       const walletClient = createWalletClient({
-        account: serviceAccount,
+        account: deployerAccount,
         chain: monadTestnet,
         transport: http(monadTestnet.rpcUrls.default.http[0]),
       });
@@ -64,19 +76,9 @@ export class SmartAccountService {
       });
 
       // Check if account is already deployed
-      let isDeployed = await this.isAccountDeployed(smartAccount.address as Address);
-
-      // Deploy smart account on-chain if not already deployed
-      if (!isDeployed) {
-        try {
-          // Note: Real deployment would require calling smartAccount.deploy()
-          // or sending a UserOperation through a bundler
-          // For MVP, we mark as not deployed and show deterministic address
-          console.log(`Smart account ${smartAccount.address} created (not yet deployed on-chain)`);
-        } catch (deployError) {
-          console.warn("Smart account deployment skipped (requires bundler):", deployError);
-        }
-      }
+      const isDeployed = await this.isAccountDeployed(smartAccount.address as Address);
+      
+      console.log(`Smart account ${smartAccount.address} created (counterfactual address). Deployed: ${isDeployed}`);
 
       // Get balance
       const balance = await publicClient.getBalance({ 
@@ -116,6 +118,101 @@ export class SmartAccountService {
       return balance.toString();
     } catch (error) {
       return "0";
+    }
+  }
+
+  /**
+   * Deploy smart account on-chain using manual deployment method
+   * Uses deployer wallet to pay gas fees for deployment transaction
+   */
+  async deploySmartAccount(params: DeploySmartAccountParams): Promise<DeploymentResult> {
+    try {
+      const { smartAccountAddress, ownerAddress } = params;
+
+      // Check if already deployed
+      const isAlreadyDeployed = await this.isAccountDeployed(smartAccountAddress);
+      if (isAlreadyDeployed) {
+        throw new Error("Smart account is already deployed on-chain");
+      }
+
+      // Generate deterministic salt (same as creation)
+      const deterministicSalt = keccak256(
+        encodePacked(['address'], [ownerAddress])
+      );
+
+      // Create deployer account (pays gas)
+      const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
+
+      // Create wallet client for deployment
+      const walletClient = createWalletClient({
+        account: deployerAccount,
+        chain: monadTestnet,
+        transport: http(monadTestnet.rpcUrls.default.http[0]),
+      });
+
+      // Recreate smart account object to get factory args
+      const smartAccount = await toMetaMaskSmartAccount({
+        client: publicClient,
+        implementation: Implementation.Hybrid,
+        deployParams: [
+          ownerAddress,
+          [],
+          [],
+          [],
+        ],
+        deploySalt: deterministicSalt,
+        signer: { walletClient },
+      });
+
+      // Verify address matches
+      if (smartAccount.address.toLowerCase() !== smartAccountAddress.toLowerCase()) {
+        throw new Error("Smart account address mismatch - regeneration failed");
+      }
+
+      // Get factory contract address and deployment data
+      const { factory, factoryData } = await smartAccount.getFactoryArgs();
+
+      console.log(`Deploying smart account ${smartAccountAddress} to Monad testnet...`);
+      console.log(`Factory: ${factory}`);
+      console.log(`Deployer: ${deployerAccount.address}`);
+
+      // Send deployment transaction - deployer pays gas
+      const txHash = await walletClient.sendTransaction({
+        to: factory,
+        data: factoryData,
+      });
+
+      console.log(`Deployment transaction sent: ${txHash}`);
+
+      // Wait for confirmation
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000, // 60 second timeout
+      });
+
+      if (receipt.status !== "success") {
+        throw new Error("Deployment transaction failed");
+      }
+
+      // Verify deployment
+      const isNowDeployed = await this.isAccountDeployed(smartAccountAddress);
+      if (!isNowDeployed) {
+        throw new Error("Deployment transaction succeeded but contract not found on-chain");
+      }
+
+      console.log(`✅ Smart account ${smartAccountAddress} deployed successfully!`);
+      console.log(`Block number: ${receipt.blockNumber}`);
+      console.log(`Gas used: ${receipt.gasUsed}`);
+
+      return {
+        txHash,
+        blockNumber: receipt.blockNumber.toString(),
+        status: "success",
+        gasUsed: receipt.gasUsed.toString(),
+      };
+    } catch (error) {
+      console.error("Smart account deployment error:", error);
+      throw new Error(`Failed to deploy smart account: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

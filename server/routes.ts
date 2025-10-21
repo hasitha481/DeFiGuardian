@@ -67,6 +67,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Deploy smart account on-chain
+  app.post("/api/smart-account/deploy", async (req, res) => {
+    try {
+      const { smartAccountAddress, ownerAddress } = req.body;
+
+      if (!smartAccountAddress || !ownerAddress) {
+        return res.status(400).json({ error: "Smart account address and owner address required" });
+      }
+
+      // Deploy smart account to Monad testnet
+      const deploymentResult = await smartAccountService.deploySmartAccount({
+        smartAccountAddress: smartAccountAddress as Address,
+        ownerAddress: ownerAddress as Address,
+      });
+
+      // Update account status in storage
+      const updatedBalance = await smartAccountService.getBalance(smartAccountAddress as Address);
+      await storage.createSmartAccount({
+        address: smartAccountAddress,
+        ownerAddress,
+        balance: updatedBalance,
+        network: "monad-testnet",
+      });
+
+      // Create audit log for deployment
+      await storage.createAuditLog({
+        accountAddress: smartAccountAddress,
+        action: "smart_account_deployed",
+        status: "success",
+        details: {
+          blockNumber: deploymentResult.blockNumber,
+          gasUsed: deploymentResult.gasUsed,
+        },
+        txHash: deploymentResult.txHash,
+      });
+
+      return res.json({
+        success: true,
+        txHash: deploymentResult.txHash,
+        blockNumber: deploymentResult.blockNumber,
+        gasUsed: deploymentResult.gasUsed,
+        explorerUrl: `https://explorer.testnet.monad.xyz/tx/${deploymentResult.txHash}`,
+      });
+    } catch (error) {
+      console.error("Smart account deployment error:", error);
+      
+      // Log failed deployment attempt
+      if (req.body.smartAccountAddress) {
+        await storage.createAuditLog({
+          accountAddress: req.body.smartAccountAddress,
+          action: "smart_account_deployed",
+          status: "failed",
+          details: {
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        });
+      }
+
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : "Failed to deploy smart account" 
+      });
+    }
+  });
+
   // Dashboard Stats
   app.get("/api/dashboard/stats/:accountAddress", async (req, res) => {
     try {

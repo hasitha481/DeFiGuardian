@@ -4,9 +4,11 @@ import { StatsCard } from "@/components/stats-card";
 import { RiskEventCard } from "@/components/risk-event-card";
 import { EmptyState } from "@/components/empty-state";
 import { DemoEventTrigger } from "@/components/demo-event-trigger";
+import { DeploySmartAccountButton } from "@/components/deploy-smart-account-button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { RiskEvent, DashboardStats } from "@shared/schema";
+import { useWallet } from "@/contexts/WalletContext";
+import type { RiskEvent, DashboardStats, SmartAccount } from "@shared/schema";
 
 interface DashboardPageProps {
   smartAccountAddress: string;
@@ -21,12 +23,20 @@ export default function DashboardPage({
   onIgnore,
   onWhitelist,
 }: DashboardPageProps) {
+  const { connectedAddress } = useWallet();
+  
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", smartAccountAddress],
   });
 
   const { data: recentEvents, isLoading: eventsLoading } = useQuery<RiskEvent[]>({
     queryKey: ["/api/events/recent", smartAccountAddress],
+  });
+
+  // Fetch smart account details to check deployment status
+  const { data: smartAccountDetails, isLoading: accountLoading } = useQuery<SmartAccount>({
+    queryKey: ["/api/smart-account", smartAccountAddress],
+    enabled: !!smartAccountAddress,
   });
 
   if (statsLoading) {
@@ -44,11 +54,20 @@ export default function DashboardPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Monitor your smart account security and risk events
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Monitor your smart account security and risk events
+          </p>
+        </div>
+        {!accountLoading && connectedAddress && (
+          <DeploySmartAccountButton
+            smartAccountAddress={smartAccountAddress}
+            ownerAddress={connectedAddress}
+            isDeployed={false}
+          />
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
