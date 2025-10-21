@@ -66,18 +66,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [sdk]);
 
   const switchToMonad = useCallback(async () => {
-    if (!provider) {
+    if (!effectiveProvider) {
       throw new Error("Provider not available");
     }
 
     try {
-      await provider.request({
+      await effectiveProvider.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${monadTestnet.id.toString(16)}` }],
       });
     } catch (switchError: any) {
       if (switchError.code === 4902) {
-        await provider.request({
+        await effectiveProvider.request({
           method: "wallet_addEthereumChain",
           params: [
             {
