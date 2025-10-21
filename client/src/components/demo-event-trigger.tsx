@@ -31,6 +31,8 @@ export function DemoEventTrigger({ accountAddress }: DemoEventTriggerProps) {
   const [eventType, setEventType] = useState("approval");
   const [amount, setAmount] = useState("1000");
   const [tokenSymbol, setTokenSymbol] = useState("USDC");
+  const [txHash, setTxHash] = useState("");
+  const [relatedAddress, setRelatedAddress] = useState("");
 
   const handleCreateEvent = async () => {
     setIsCreating(true);
