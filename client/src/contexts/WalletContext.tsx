@@ -82,23 +82,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const effectiveProvider = provider || selectInjectedProvider();
 
   const connect = useCallback(async () => {
+    console.log("[WalletContext.connect] Starting connection");
     let accounts: string[] | undefined = undefined;
 
     // Prefer direct connection to injected MetaMask to avoid SDK provider re-injection issues
     try {
+      console.log("[WalletContext.connect] Attempting direct provider request");
       const eff = await getPreferredProvider();
+      console.log("[WalletContext.connect] Preferred provider:", !!eff);
       if (eff && typeof eff.request === 'function') {
+        console.log("[WalletContext.connect] Sending eth_requestAccounts");
         const result = await eff.request({ method: 'eth_requestAccounts' });
+        console.log("[WalletContext.connect] Got result:", result);
         accounts = Array.isArray(result) ? result : undefined;
       }
     } catch (err) {
+      console.warn("[WalletContext.connect] Direct request failed:", err);
       // ignore and fallback to SDK
     }
 
     if ((!accounts || accounts.length === 0) && sdk) {
       try {
+        console.log("[WalletContext.connect] Trying SDK connect");
         accounts = await sdk.connect();
+        console.log("[WalletContext.connect] SDK connect result:", accounts);
       } catch (err) {
+        console.warn("[WalletContext.connect] SDK connect failed:", err);
         // last resort: re-attempt injected provider
         const eff2 = await getPreferredProvider();
         if (eff2 && typeof eff2.request === 'function') {
@@ -109,8 +118,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
 
     if (!accounts || accounts.length === 0) {
-      throw new Error("No accounts found. Ensure MetaMask is installed and unlocked.");
+      const err = "No accounts found. Ensure MetaMask is installed and unlocked.";
+      console.error("[WalletContext.connect]", err);
+      throw new Error(err);
     }
+    console.log("[WalletContext.connect] Connection successful, account:", accounts[0]);
     return accounts[0];
   }, [sdk]);
 
