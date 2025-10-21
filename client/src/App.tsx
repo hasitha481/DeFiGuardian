@@ -97,6 +97,27 @@ function AppContent() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
+  // Detect multiple injected wallets that can conflict with MetaMask and warn the user
+  useEffect(() => {
+    try {
+      const win = window as any;
+      const providers = win?.ethereum?.providers;
+      if (Array.isArray(providers) && providers.length > 1) {
+        const hasMetaMask = providers.some((p: any) => p && p.isMetaMask);
+        const others = providers.filter((p: any) => !p?.isMetaMask).length;
+        if (hasMetaMask && others > 0) {
+          toast({
+            title: "Multiple Wallet Extensions Detected",
+            description:
+              "We detected several wallet extensions (e.g., Backpack, Razor, Nightly). For reliable connection, disable non-MetaMask wallets or set MetaMask as default.",
+          });
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+  }, [toast]);
+
   // Real-time updates: prefer WebSocket when running top-level; fall back to polling in iframes (Builder preview)
   useEffect(() => {
     if (!smartAccount) return;
