@@ -39,15 +39,9 @@ export function DeploySmartAccountButton({
 
   const deployMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("/api/smart-account/deploy", {
-        method: "POST",
-        body: JSON.stringify({
-          smartAccountAddress,
-          ownerAddress,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
+      const response = await apiRequest("POST", "/api/smart-account/deploy", {
+        smartAccountAddress,
+        ownerAddress,
       });
       return await response.json() as DeploymentResponse;
     },
