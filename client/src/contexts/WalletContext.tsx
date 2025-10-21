@@ -33,17 +33,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const isCorrectChain = chainId === `0x${monadTestnet.id.toString(16)}`;
 
-  // Select an effective injected provider if SDK provider is not available
+  // Robust provider detection with EIP-6963 support
   const selectInjectedProvider = () => {
     try {
       const win = window as any;
       if (win && win.ethereum) {
         if (Array.isArray(win.ethereum.providers) && win.ethereum.providers.length > 0) {
-          // prefer MetaMask provider if available
           const mm = win.ethereum.providers.find((p: any) => p.isMetaMask);
-          return mm || win.ethereum.providers[0];
+          return mm || win.ethereum.providers.find((p: any) => !!p) || win.ethereum.providers[0];
         }
-        // single provider
+        if (win.ethereum.isMetaMask) return win.ethereum;
         return win.ethereum;
       }
     } catch (err) {
@@ -52,43 +51,83 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return undefined;
   };
 
+  const requestEip6963Provider = async (timeoutMs = 400): Promise<any | undefined> => {
+    try {
+      const announced: any[] = [];
+      const onAnnounce = (event: any) => {
+        try { announced.push(event?.detail?.provider); } catch (_) {}
+      };
+      window.addEventListener('eip6963:announceProvider', onAnnounce as any);
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise((r) => setTimeout(r, timeoutMs));
+      window.removeEventListener('eip6963:announceProvider', onAnnounce as any);
+      if (announced.length > 0) {
+        const mm = announced.find((p) => p && p.isMetaMask);
+        return mm || announced[0];
+      }
+    } catch (err) {
+      console.warn('EIP-6963 discovery failed', err);
+    }
+    return undefined;
+  };
+
+  const getPreferredProvider = async (): Promise<any | undefined> => {
+    const injected = selectInjectedProvider();
+    if (injected) return injected;
+    const discovered = await requestEip6963Provider();
+    if (discovered) return discovered;
+    return provider; // fallback from SDK if available
+  };
+
   const effectiveProvider = provider || selectInjectedProvider();
 
   const connect = useCallback(async () => {
-    if (!sdk) {
-      throw new Error("SDK not initialized");
-    }
     let accounts: string[] | undefined = undefined;
+
+    // Prefer direct connection to injected MetaMask to avoid SDK provider re-injection issues
     try {
-      accounts = await sdk.connect();
-    } catch (err) {
-      // fallback to direct provider request if SDK fails
-      const eff = selectInjectedProvider();
+      const eff = await getPreferredProvider();
       if (eff && typeof eff.request === 'function') {
         const result = await eff.request({ method: 'eth_requestAccounts' });
         accounts = Array.isArray(result) ? result : undefined;
       }
+    } catch (err) {
+      // ignore and fallback to SDK
+    }
+
+    if ((!accounts || accounts.length === 0) && sdk) {
+      try {
+        accounts = await sdk.connect();
+      } catch (err) {
+        // last resort: re-attempt injected provider
+        const eff2 = await getPreferredProvider();
+        if (eff2 && typeof eff2.request === 'function') {
+          const result = await eff2.request({ method: 'eth_requestAccounts' });
+          accounts = Array.isArray(result) ? result : undefined;
+        }
+      }
     }
 
     if (!accounts || accounts.length === 0) {
-      throw new Error("No accounts found");
+      throw new Error("No accounts found. Ensure MetaMask is installed and unlocked.");
     }
     return accounts[0];
   }, [sdk]);
 
   const switchToMonad = useCallback(async () => {
-    if (!effectiveProvider) {
+    const eff = effectiveProvider || (await getPreferredProvider());
+    if (!eff) {
       throw new Error("Provider not available");
     }
 
     try {
-      await effectiveProvider.request({
+      await eff.request({
         method: "wallet_switchEthereumChain",
         params: [{ chainId: `0x${monadTestnet.id.toString(16)}` }],
       });
     } catch (switchError: any) {
       if (switchError.code === 4902) {
-        await effectiveProvider.request({
+        await eff.request({
           method: "wallet_addEthereumChain",
           params: [
             {
@@ -104,7 +143,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw switchError;
       }
     }
-  }, [provider]);
+  }, [provider, effectiveProvider]);
 
   const createSmartAccountFn = useCallback(async (ownerAddress: string) => {
     setIsCreatingSmartAccount(true);
