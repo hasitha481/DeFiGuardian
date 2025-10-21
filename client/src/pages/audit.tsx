@@ -118,7 +118,7 @@ export default function AuditPage({ smartAccountAddress }: AuditPageProps) {
                   </div>
 
                   {log.details && (
-                    <pre className="text-sm text-muted-foreground mb-2 whitespace-pre-wrap">{JSON.stringify(log.details)}</pre>
+                    <pre className="text-sm text-muted-foreground mb-2 whitespace-pre-wrap">{String(JSON.stringify(log.details))}</pre>
                   )}
 
                   {log.txHash && (
