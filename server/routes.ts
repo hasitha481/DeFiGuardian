@@ -810,7 +810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const account = (req.query.account as string | undefined)?.toLowerCase();
       const publicClient = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
 
-      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
 
       let logs: any[] = [];
             if (receipt) {
