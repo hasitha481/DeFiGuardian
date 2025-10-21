@@ -85,7 +85,13 @@ export function RiskEventCard({
                 <Badge variant="outline" className="capitalize">
                   {event.eventType}
                 </Badge>
-                <RiskScoreBadge score={event.riskScore} level={event.riskLevel} size="sm" />
+                {
+                  (() => {
+                    const allowed = ["low", "medium", "high"] as const;
+                    const level = allowed.includes(event.riskLevel as any) ? (event.riskLevel as "low" | "medium" | "high") : "low";
+                    return <RiskScoreBadge score={event.riskScore} level={level} size="sm" />;
+                  })()
+                }
                 {getStatusBadge()}
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
