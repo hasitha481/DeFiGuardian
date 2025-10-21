@@ -260,11 +260,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         spenderAddress // Must have spender address for revocation
       ) {
         try {
-          // Execute real blockchain transaction to auto-revoke approval
-          const revokeResult = await transactionService.revokeApproval({
+          // Get smart account to find owner address
+          const smartAccount = await storage.getSmartAccount(accountAddress);
+          if (!smartAccount) {
+            throw new Error("Smart account not found for auto-revoke");
+          }
+
+          // Execute gasless auto-revoke via paymaster (user doesn't pay gas!)
+          const revokeResult = await transactionService.executeGaslessRevoke({
             tokenAddress: tokenAddress as Address,
             spenderAddress: spenderAddress as Address,
-            ownerAddress: accountAddress as Address,
+            ownerAddress: smartAccount.ownerAddress as Address,
+            smartAccountAddress: accountAddress as Address,
           });
 
           await storage.updateRiskEventStatus(event.id, "revoked");
@@ -277,7 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             details: {
               reason: "Auto-revoked due to high risk score",
               riskScore: riskAnalysis.score,
-              gasUsed: revokeResult.gasUsed?.toString(),
+              gasless: true,
+              userOpHash: revokeResult.userOpHash,
               blockNumber: revokeResult.blockNumber?.toString(),
             },
             txHash: revokeResult.txHash,
@@ -498,7 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // LEGACY: Revoke approval - Now uses mock transactions (real flow uses revoke-confirm)
+  // Revoke approval using gasless transactions (paymaster sponsorship)
   app.post("/api/events/revoke", async (req, res) => {
     try {
       const { eventId } = req.body;
@@ -508,32 +516,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Event not found" });
       }
 
-      if (!event.spenderAddress) {
-        return res.status(400).json({ error: "Event missing spender address" });
+      if (!event.spenderAddress || !event.tokenAddress) {
+        return res.status(400).json({ error: "Event missing required addresses" });
       }
 
-      console.warn("DEPRECATED: Use /api/events/revoke-confirm with client-side signing");
+      // Get smart account to find owner address
+      const smartAccount = await storage.getSmartAccount(event.accountAddress);
+      if (!smartAccount) {
+        return res.status(404).json({ error: "Smart account not found" });
+      }
 
-      // Mock transaction hash for legacy support
-      const mockTxHash = `0x${Array.from({ length: 64 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("")}` as Address;
+      console.log(`Executing gasless revoke for event ${eventId}...`);
+
+      // Execute gasless revocation via paymaster (user doesn't pay gas!)
+      const revokeResult = await transactionService.executeGaslessRevoke({
+        tokenAddress: event.tokenAddress as Address,
+        spenderAddress: event.spenderAddress as Address,
+        ownerAddress: smartAccount.ownerAddress as Address, // EOA owner
+        smartAccountAddress: event.accountAddress as Address, // Smart account contract
+      });
 
       // Update event status
       await storage.updateRiskEventStatus(eventId, "revoked");
 
-      // Create audit log with mock transaction
+      // Create audit log with real transaction
       await storage.createAuditLog({
         accountAddress: event.accountAddress,
         action: "revoke_approval",
         eventId,
-        status: "success",
+        status: revokeResult.status === "confirmed" ? "success" : "pending",
         details: {
           manual: true,
-          mock: true,
-          message: "Mock revocation - upgrade to client-side signing",
+          gasless: true,
+          userOpHash: revokeResult.userOpHash,
+          message: "Gasless revocation via paymaster - user paid no gas fees",
         },
-        txHash: mockTxHash,
+        txHash: revokeResult.txHash,
       });
 
       // Broadcast update
@@ -541,7 +559,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (clients) {
         const message = JSON.stringify({
           type: "event_updated",
-          data: { eventId, status: "revoked", txHash: mockTxHash },
+          data: { eventId, status: "revoked", txHash: revokeResult.txHash },
         });
         clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
@@ -552,8 +570,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       return res.json({
         success: true,
-        txHash: mockTxHash,
-        status: "confirmed",
+        txHash: revokeResult.txHash,
+        userOpHash: revokeResult.userOpHash,
+        status: revokeResult.status,
+        gasless: true,
       });
     } catch (error) {
       console.error("Revoke error:", error);

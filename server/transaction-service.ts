@@ -8,6 +8,7 @@ import {
 } from "viem";
 import { monadTestnet } from "../client/src/lib/chains";
 import { privateKeyToAccount } from "viem/accounts";
+import { paymasterService } from "./paymaster-service";
 
 // ERC20 ABI for approve function
 const erc20Abi = parseAbi([
@@ -34,28 +35,69 @@ const SERVICE_PRIVATE_KEY =
 interface RevokeApprovalParams {
   tokenAddress: Address;
   spenderAddress: Address;
-  ownerAddress: Address; // Smart account address
+  ownerAddress: Address; // Smart account owner address (EOA)
+  smartAccountAddress: Address; // Smart account contract address
 }
 
 interface RevokeResult {
   txHash: Hash;
+  userOpHash?: Hash;
   status: "pending" | "confirmed" | "failed";
   blockNumber?: bigint;
   gasUsed?: bigint;
+  gasless: boolean; // Whether transaction was sponsored
 }
 
 export class TransactionService {
   /**
-   * Get transaction data for revoking ERC-20 approval
-   * Returns data needed for client-side signing with MetaMask
+   * Execute gasless approval revocation using paymaster
+   * This is the new primary method - no user gas fees required
    */
-  async prepareRevokeTransaction(params: RevokeApprovalParams): Promise<{
-    tokenAddress: Address;
-    spenderAddress: Address;
-    ownerAddress: Address;
-  }> {
-    // Return transaction parameters for client-side signing
-    return params;
+  async executeGaslessRevoke(params: RevokeApprovalParams): Promise<RevokeResult> {
+    const { tokenAddress, spenderAddress, ownerAddress, smartAccountAddress } = params;
+
+    try {
+      // Check current allowance first
+      const currentAllowance = await this.getAllowance(
+        tokenAddress,
+        smartAccountAddress,
+        spenderAddress
+      );
+
+      if (currentAllowance === BigInt(0)) {
+        console.log("Approval already revoked (allowance is 0)");
+        return {
+          txHash: `0x${"0".repeat(64)}` as Hash,
+          status: "confirmed",
+          blockNumber: BigInt(0),
+          gasless: true,
+        };
+      }
+
+      console.log(`Executing gasless revoke via paymaster...`);
+
+      // Use paymaster service to sponsor the transaction
+      const result = await paymasterService.executeGaslessRevoke({
+        smartAccountAddress,
+        ownerAddress,
+        tokenAddress,
+        spenderAddress,
+      });
+
+      return {
+        txHash: result.txHash || (`0x${"0".repeat(64)}` as Hash),
+        userOpHash: result.userOpHash,
+        status: result.status,
+        gasless: true,
+      };
+    } catch (error) {
+      console.error("Gasless revoke error:", error);
+      throw new Error(
+        `Failed to execute gasless revoke: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
   }
 
   /**
@@ -80,6 +122,7 @@ export class TransactionService {
           txHash: `0x${"0".repeat(64)}` as Hash,
           status: "confirmed",
           blockNumber: BigInt(0),
+          gasless: false,
         };
       }
 
@@ -109,6 +152,7 @@ export class TransactionService {
         status: "confirmed",
         blockNumber: BigInt(Math.floor(Math.random() * 1000000)),
         gasUsed: BigInt(21000),
+        gasless: false,
       };
     } catch (error) {
       console.error("Error revoking approval:", error);
