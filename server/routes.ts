@@ -722,6 +722,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug: fetch transaction and logs on-chain (useful to trace why a tx didn't surface in Envio/RPC polling)
+  app.get('/api/debug/tx/:txHash', async (req, res) => {
+    try {
+      const { txHash } = req.params;
+      const account = (req.query.account as string | undefined)?.toLowerCase();
+      const publicClient = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
+
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+
+      let logs: any[] = [];
+      if (receipt) {
+        // fetch logs for this transaction
+        logs = await publicClient.getLogs({
+          fromBlock: receipt.blockNumber,
+          toBlock: receipt.blockNumber,
+          transactionHash: txHash,
+        });
+      }
+
+      // parse for Transfer/Approval topics
+      const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+      const APPROVAL_TOPIC = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+
+      const parsed = logs.map((l) => {
+        return {
+          address: l.address,
+          topics: l.topics,
+          data: l.data,
+          logIndex: l.logIndex,
+          isTransfer: l.topics[0] === TRANSFER_TOPIC,
+          isApproval: l.topics[0] === APPROVAL_TOPIC,
+        };
+      });
+
+      const matched = account
+        ? parsed.filter((p) => p.topics.some((t: string) => t && t.toLowerCase().includes(account.replace('0x',''))))
+        : [];
+
+      return res.json({ receipt, logs: parsed, matched });
+    } catch (error) {
+      console.error('Debug tx endpoint error:', error);
+      return res.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
+    }
+  });
+
   // Create HTTP server
   const httpServer = createServer(app);
 
