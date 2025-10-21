@@ -1,6 +1,7 @@
 import { Shield, Zap, Brain, Lock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WalletConnectButtonReal } from "@/components/wallet-connect-button-real";
+import OpenInNewTab from "@/components/open-in-new-tab";
 
 interface LandingPageProps {
   onSmartAccountCreated?: () => void;
