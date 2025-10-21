@@ -11,15 +11,21 @@
 
 import HyperSync from "@envio-dev/hypersync-client";
 import { monadTestnet } from "../client/src/lib/chains";
+import { createPublicClient, http } from 'viem';
 
 // Envio HyperSync endpoint for Monad testnet
 // Note: Replace with actual Envio GraphQL endpoint once indexer is deployed
-const ENVIO_GRAPHQL_ENDPOINT = process.env.ENVIO_GRAPHQL_ENDPOINT || 
-  "https://indexer.envio.dev/v1/graphql";  // Placeholder
+const ENVIO_GRAPHQL_ENDPOINT = process.env.ENVIO_GRAPHQL_ENDPOINT || "";  // empty => use RPC fallback
 
 // ERC-20 event signatures
 const ERC20_APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
 const ERC20_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+// RPC public client for Monad (fallback when Envio not configured)
+const publicClient = createPublicClient({
+  chain: monadTestnet,
+  transport: http(monadTestnet.rpcUrls.default.http[0]),
+});
 
 export interface ApprovalEvent {
   owner: string;
