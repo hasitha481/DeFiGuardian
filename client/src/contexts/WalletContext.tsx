@@ -78,6 +78,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setIsCreatingSmartAccount(true);
     
     try {
+      // If running inside an iframe (Builder preview), warn the user that wallet flow may be limited
+      const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
+      if (isInIframe) {
+        console.warn("createSmartAccount called inside iframe; MetaMask may not work in this environment.");
+      }
+
       const response = await fetch("/api/smart-account/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,15 +91,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create smart account");
+        const text = await response.text().catch(() => "");
+        throw new Error(text || "Failed to create smart account");
       }
 
       const account = await response.json();
       setSmartAccount(account);
       return account;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create smart account:", error);
-      throw error;
+      throw new Error(error?.message || "Failed to create smart account");
     } finally {
       setIsCreatingSmartAccount(false);
     }
