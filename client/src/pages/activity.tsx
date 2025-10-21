@@ -32,8 +32,12 @@ export default function ActivityPage({
   const [riskFilter, setRiskFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const { account: connectedAddress } = useWallet();
+
+  const combined = connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress;
   const { data: events, isLoading } = useQuery<RiskEvent[]>({
-    queryKey: ["/api/events", smartAccountAddress],
+    queryKey: ["/api/events", combined],
+    refetchInterval: 5000,
   });
 
   const filteredEvents = events?.filter((event) => {
