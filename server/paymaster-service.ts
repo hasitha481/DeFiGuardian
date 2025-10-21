@@ -17,8 +17,7 @@ if (!DEPLOYER_PRIVATE_KEY) {
   console.warn("DEPLOYER_PRIVATE_KEY not set — gasless operations requiring signing will be disabled until configured.");
 }
 
-// Monad testnet chain ID
-const MONAD_CHAIN_ID = monadTestnet.id;
+// Monad testnet chain ID (defined below)
 
 // Pimlico bundler URL for Monad testnet (created only if API key is present)
 // Note: Pimlico may not support Monad testnet yet - we'll use a generic approach
