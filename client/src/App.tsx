@@ -118,31 +118,36 @@ function AppContent() {
     }
   }, [toast]);
 
-  // Real-time updates: prefer WebSocket when running top-level; fall back to polling in iframes (Builder preview)
+  // Real-time updates: prefer WebSocket; robustly fall back to polling on error/close or when running on Netlify
   useEffect(() => {
     if (!smartAccount) return;
 
-    const isInIframe = window.self !== window.top;
-
-    if (isInIframe) {
-      // Notify the user that wallet injection and websockets may not work inside Builder preview
-      toast({
-        title: "Preview Mode: Limited Wallet Support",
-        description:
-          "You're running inside Builder preview. MetaMask and real-time WebSocket updates may not work here. Open the app in a new tab to enable full wallet functionality.",
-      });
-
-      // Poll backend periodically to simulate real-time updates in preview
+    const startPolling = () => {
+      setIsConnected(false);
       const poll = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
         queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
       }, 5000);
+      return poll;
+    };
 
+    const isInIframe = window.self !== window.top;
+    const isNetlify = /netlify\.app$/i.test(window.location.host);
+
+    if (isInIframe || isNetlify) {
+      if (isInIframe) {
+        toast({
+          title: "Preview Mode: Limited Wallet Support",
+          description:
+            "You're running inside Builder preview. MetaMask and real-time WebSocket updates may not work here. Open the app in a new tab to enable full wallet functionality.",
+        });
+      }
+      const poll = startPolling();
       return () => clearInterval(poll);
     }
 
-    // Not in iframe: attempt WebSocket connection
+    let pollHandle: any;
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -155,6 +160,17 @@ function AppContent() {
         } catch (err) {
           console.warn("WebSocket send failed:", err);
         }
+      };
+
+      socket.onerror = (e) => {
+        console.warn("WebSocket error, switching to polling:", e);
+        try { socket.close(); } catch (_) {}
+        if (!pollHandle) pollHandle = startPolling();
+      };
+
+      socket.onclose = () => {
+        setIsConnected(false);
+        if (!pollHandle) pollHandle = startPolling();
       };
 
       socket.onmessage = (event) => {
@@ -180,17 +196,13 @@ function AppContent() {
         }
       };
 
-      socket.onclose = () => setIsConnected(false);
-
-      return () => socket.close();
+      return () => {
+        try { socket.close(); } catch (_) {}
+        if (pollHandle) clearInterval(pollHandle);
+      };
     } catch (err) {
       console.warn("Failed to create WebSocket, falling back to polling:", err);
-      const poll = setInterval(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
-      }, 5000);
-
+      const poll = startPolling();
       return () => clearInterval(poll);
     }
   }, [smartAccount, toast]);
