@@ -26,12 +26,23 @@ export default function DashboardPage({
   const { account: connectedAddress } = useWallet();
   
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: ["/api/dashboard/stats", smartAccountAddress],
+    queryKey: ["/api/dashboard/stats", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
   });
 
   const { data: recentEvents, isLoading: eventsLoading } = useQuery<RiskEvent[]>({
-    queryKey: ["/api/events/recent", smartAccountAddress],
+    queryKey: ["/api/events/recent", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
   });
+
+  // Start server-side monitoring for both addresses
+  useEffect(() => {
+    const addresses = [smartAccountAddress, connectedAddress].filter(Boolean) as string[];
+    if (addresses.length === 0) return;
+    fetch('/api/monitor/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses }),
+    }).catch(() => {});
+  }, [smartAccountAddress, connectedAddress]);
 
   // Fetch smart account details to check deployment status
   const { data: smartAccountDetails, isLoading: accountLoading } = useQuery<SmartAccount>({
