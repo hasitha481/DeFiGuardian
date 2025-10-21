@@ -143,6 +143,7 @@ function AppContent() {
       setIsConnected(true); // consider polling as connected monitoring
       const poll = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
         queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
       }, 5000);
