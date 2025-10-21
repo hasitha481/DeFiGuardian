@@ -208,6 +208,7 @@ function AppContent() {
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
           } else if (message.type === "event_updated") {
             queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
             queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
           }
         } catch (err) {
