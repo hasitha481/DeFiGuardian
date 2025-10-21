@@ -221,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!accountAddress || !tokenAddress) continue;
 
           // run risk analysis
-          const whitelistedAddresses = (await storage.getUserSettings(accountAddress))?.whitelistedAddresses || [];
+          const whitelistedAddresses = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
           const risk = await analyzeRisk({
             eventType: eventType === 'approval' ? 'approval' : 'transfer',
             tokenSymbol: tokenSymbol || undefined,
@@ -813,14 +813,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
 
       let logs: any[] = [];
-      if (receipt) {
-        // fetch logs for this transaction
-        logs = await publicClient.getLogs({
-          fromBlock: receipt.blockNumber,
-          toBlock: receipt.blockNumber,
-          transactionHash: txHash,
-        });
-      }
+            if (receipt) {
+              // fetch logs for this transaction (fetch block logs then filter by transactionHash)
+              const fromBlock = BigInt(receipt.blockNumber as unknown as number);
+              const toBlock = BigInt(receipt.blockNumber as unknown as number);
+              const blockLogs = await publicClient.getLogs({
+                fromBlock,
+                toBlock,
+              });
+              logs = blockLogs.filter((l) => l.transactionHash === txHash);
+            }
 
       // parse for Transfer/Approval topics
       const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
