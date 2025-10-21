@@ -35,15 +35,17 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
     setIsProcessing(true);
     console.log("[WalletConnect] Button clicked, starting connection flow");
 
-    // Check if MetaMask is available
-    const hasMetaMask = !!(typeof window !== "undefined" && (window as any).ethereum);
+    // Check if MetaMask is available (ignore other wallets)
+    const win = typeof window !== "undefined" ? (window as any) : undefined;
+    const metaMaskProvider = win?.ethereum?.providers?.find((p: any) => p && p.isMetaMask) || (win?.ethereum?.isMetaMask ? win.ethereum : undefined);
+    const hasMetaMask = !!metaMaskProvider;
     console.log("[WalletConnect] MetaMask detected:", hasMetaMask);
 
     if (!hasMetaMask) {
-      console.error("[CRITICAL] MetaMask not found - showing error toast");
+      console.error("[CRITICAL] MetaMask not found (other wallets detected). Showing install prompt.");
       toast({
-        title: "MetaMask Not Found",
-        description: "Please install MetaMask browser extension and refresh the page.",
+        title: "MetaMask Required",
+        description: "Please install the MetaMask extension (disable Backpack/Razor/Nightly) and refresh.",
         variant: "destructive",
       });
       setIsProcessing(false);
