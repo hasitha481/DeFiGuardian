@@ -136,7 +136,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Listen for account changes (guard against multiple injected providers / injection failures)
   useEffect(() => {
-    if (!provider) return;
+    if (!effectiveProvider) return;
 
     const handleAccountsChanged = (...args: unknown[]) => {
       try {
