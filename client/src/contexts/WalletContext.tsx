@@ -159,9 +159,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const createSmartAccountFn = useCallback(async (ownerAddress: string) => {
     setIsCreatingSmartAccount(true);
-    
+
     try {
-      // If running inside an iframe (Builder preview), warn the user that wallet flow may be limited
       const isInIframe = typeof window !== 'undefined' && window.self !== window.top;
       if (isInIframe) {
         console.warn("createSmartAccount called inside iframe; MetaMask may not work in this environment.");
@@ -180,6 +179,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       const account = await response.json();
       setSmartAccount(account);
+
+      // Immediately start backend monitoring for the newly created smart account and the owner EOA
+      try {
+        const addresses = [account?.address, ownerAddress].filter(Boolean);
+        if (addresses.length > 0) {
+          await fetch('/api/monitor/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses }),
+          }).catch(() => {});
+        }
+      } catch (_) {}
+
       return account;
     } catch (error: any) {
       console.error("Failed to create smart account:", error);
@@ -220,7 +232,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
 
     try {
-      // Some injected providers may throw when adding listeners; guard against it
       if (typeof effectiveProvider.on === "function") {
         effectiveProvider.on("accountsChanged", handleAccountsChanged);
         effectiveProvider.on("chainChanged", handleChainChanged);
@@ -235,11 +246,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           effectiveProvider.removeListener("accountsChanged", handleAccountsChanged);
           effectiveProvider.removeListener("chainChanged", handleChainChanged);
         }
-      } catch (err) {
-        /* ignore */
-      }
+      } catch (err) {}
     };
   }, [effectiveProvider]);
+
+  // Auto-start backend monitoring for the connected EOA when on Monad
+  useEffect(() => {
+    const start = async () => {
+      try {
+        const addr = account?.toLowerCase();
+        if (!addr) return;
+        if (!isCorrectChain) return;
+        await fetch('/api/monitor/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses: [addr] }),
+        }).catch(() => {});
+      } catch (_) {}
+    };
+    start();
+  }, [account, isCorrectChain]);
 
   const value: WalletContextValue = {
     connected,
