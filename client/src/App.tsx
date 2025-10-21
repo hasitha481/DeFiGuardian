@@ -204,6 +204,7 @@ function AppContent() {
             setTimeout(() => setIsIndexing(false), 2000);
 
             queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
             queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
           } else if (message.type === "event_updated") {
             queryClient.invalidateQueries({ queryKey: ["/api/events"] });
