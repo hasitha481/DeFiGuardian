@@ -2,7 +2,7 @@ import { envioClient } from './envio-client';
 import { storage } from './storage';
 import { analyzeRisk } from './ai-risk-analyzer';
 
-const intervals = new Map<string, NodeJS.Timer>();
+const intervals = new Map<string, NodeJS.Timeout>();
 
 export async function startMonitoringAddress(address: string) {
   const addr = address.toLowerCase();
