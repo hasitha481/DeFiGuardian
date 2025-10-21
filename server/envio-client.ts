@@ -110,8 +110,11 @@ export class EnvioClient {
       // RPC fallback: query logs for Approval topic and filter by owner address
       try {
         const latest = await publicClient.getBlockNumber();
-        const fromBlock = Math.max(0, Number(latest) - 5000);
-        const toBlock = Number(latest);
+        const fromBlockNum = Math.max(0, Number(latest) - 5000);
+        const toBlockNum = Number(latest);
+
+        const fromBlock = BigInt(fromBlockNum);
+        const toBlock = BigInt(toBlockNum);
 
         const ownerTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
 
@@ -122,18 +125,18 @@ export class EnvioClient {
         });
 
         const approvals = logs.slice(0, limit).map((log) => {
-          const owner = `0x${log.topics[1].slice(26)}`;
-          const spender = `0x${log.topics[2].slice(26)}`;
-          const value = BigInt(log.data);
+          const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`;
+          const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`;
+          const value = BigInt(log.data ?? '0');
           return {
             owner: owner.toLowerCase(),
             spender: spender.toLowerCase(),
             value,
-            blockNumber: Number(log.blockNumber),
+            blockNumber: Number(log.blockNumber ?? 0),
             timestamp: 0, // RPC logs don't include timestamp; resolve if needed
-            transactionHash: log.transactionHash,
-            logIndex: Number(log.logIndex),
-            tokenAddress: log.address,
+            transactionHash: log.transactionHash ?? "",
+            logIndex: Number(log.logIndex ?? 0),
+            tokenAddress: log.address ?? "",
           };
         });
 
@@ -195,8 +198,11 @@ export class EnvioClient {
       // RPC fallback: query logs for Transfer topic involving address as from or to
       try {
         const latest = await publicClient.getBlockNumber();
-        const fromBlock = Math.max(0, Number(latest) - 5000);
-        const toBlock = Number(latest);
+        const fromBlockNum = Math.max(0, Number(latest) - 5000);
+        const toBlockNum = Number(latest);
+
+        const fromBlock = BigInt(fromBlockNum);
+        const toBlock = BigInt(toBlockNum);
 
         const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
 
@@ -207,18 +213,18 @@ export class EnvioClient {
         const combined = [...logsFrom, ...logsTo].slice(0, limit);
 
         const transfers = combined.map((log) => {
-          const from = `0x${log.topics[1].slice(26)}`;
-          const to = `0x${log.topics[2].slice(26)}`;
-          const value = BigInt(log.data);
+          const from = `0x${(log.topics?.[1] ?? '').slice(26)}`;
+          const to = `0x${(log.topics?.[2] ?? '').slice(26)}`;
+          const value = BigInt(log.data ?? '0');
           return {
             from: from.toLowerCase(),
             to: to.toLowerCase(),
             value,
-            blockNumber: Number(log.blockNumber),
+            blockNumber: Number(log.blockNumber ?? 0),
             timestamp: 0,
-            transactionHash: log.transactionHash,
-            logIndex: Number(log.logIndex),
-            tokenAddress: log.address,
+            transactionHash: log.transactionHash ?? "",
+            logIndex: Number(log.logIndex ?? 0),
+            tokenAddress: log.address ?? "",
           };
         });
 
