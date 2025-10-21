@@ -16,6 +16,12 @@
   status = 200
   force = true
 
+# Single Page App fallback for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
 # CORS headers for static assets (API CORS handled by backend)
 [[headers]]
   for = "/*"
