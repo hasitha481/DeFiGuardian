@@ -180,6 +180,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public config endpoint (used by client to open the app in a new tab)
+  app.get('/api/config', async (req, res) => {
+    try {
+      const publicUrl = process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`;
+      return res.json({ publicUrl });
+    } catch (err) {
+      console.error('Config endpoint error:', err);
+      return res.status(500).json({ error: 'Failed to fetch config' });
+    }
+  });
+
   // Dashboard Stats
   app.get("/api/dashboard/stats/:accountAddress", async (req, res) => {
     try {
