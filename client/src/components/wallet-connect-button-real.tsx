@@ -70,7 +70,7 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
 
       // Step 2: Switch to Monad testnet
       if (!isCorrectChain) {
-        console.log("[WalletConnect] Switching to Monad testnet, current chainId:", chainId);
+        console.log("[WalletConnect] Switching to Monad testnet, isCorrectChain:", isCorrectChain);
         toast({
           title: "Switching Network",
           description: "Please approve the network switch in MetaMask.",
