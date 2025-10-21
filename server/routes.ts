@@ -259,6 +259,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: 'detected',
             });
 
+            // Auto-revoke if enabled and high risk
+            try {
+              const settings = await storage.getUserSettings(accountAddress);
+              if (settings?.autoRevokeEnabled && risk.score > (settings.riskThreshold || 70)) {
+                const smart = await storage.getSmartAccount(accountAddress);
+                if (smart) {
+                  const result = await transactionService.executeGaslessRevoke({
+                    tokenAddress: (log.address?.toLowerCase() || '') as Address,
+                    spenderAddress: spender as Address,
+                    ownerAddress: smart.ownerAddress as Address,
+                    smartAccountAddress: accountAddress as Address,
+                  });
+                  await storage.updateRiskEventStatus(event.id, 'revoked');
+                  await storage.createAuditLog({
+                    accountAddress,
+                    action: 'revoke_approval',
+                    eventId: event.id,
+                    status: result.status === 'confirmed' ? 'success' : 'pending',
+                    details: { reason: 'Auto-revoked due to high risk score', riskScore: risk.score, gasless: true, userOpHash: result.userOpHash, blockNumber: result.blockNumber?.toString() },
+                    txHash: result.txHash,
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('auto-revoke (ingest-tx) failed', e);
+            }
+
             created.push(event);
             const clients = wsClients.get(accountAddress);
             if (clients) {
