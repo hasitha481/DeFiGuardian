@@ -4,8 +4,8 @@
 AI-Powered DeFi security dApp built for the MetaMask Smart Accounts x Monad Hackathon. The application provides real-time monitoring and automated risk management for DeFi assets using MetaMask Smart Accounts on Monad testnet.
 
 ## Project Status
-**Status**: MVP Development Complete
-**Last Updated**: January 2025
+**Status**: MVP Development Complete - Smart Account Deployment Live
+**Last Updated**: October 21, 2025
 
 ## Tech Stack
 - **Frontend**: React + TypeScript, Tailwind CSS, Shadcn UI, Wouter routing
@@ -28,9 +28,12 @@ AI-Powered DeFi security dApp built for the MetaMask Smart Accounts x Monad Hack
 
 ### Key Features
 1. **Smart Account Management**
-   - Connect/create smart accounts on Monad testnet
+   - Connect/create smart accounts on Monad testnet (deterministic CREATE2 addresses)
+   - **Real on-chain deployment** using MetaMask Delegation Toolkit
+   - Manual deployment via relay account (DEPLOYER_PRIVATE_KEY pays gas)
    - View balance and account details
    - Network status monitoring
+   - Deployment verification with transaction receipt
 
 2. **AI Risk Analysis**
    - Real-time risk scoring (0-100) using GPT-5
@@ -66,6 +69,8 @@ AI-Powered DeFi security dApp built for the MetaMask Smart Accounts x Monad Hack
 
 ### Smart Accounts
 - `POST /api/smart-account/connect` - Create/connect smart account
+- `POST /api/smart-account/deploy` - Deploy smart account contract on-chain (with rate limiting)
+- `GET /api/smart-account/:address` - Get smart account details
 - `GET /api/dashboard/stats/:accountAddress` - Get dashboard statistics
 
 ### Risk Events
@@ -95,12 +100,40 @@ AI-Powered DeFi security dApp built for the MetaMask Smart Accounts x Monad Hack
 
 ### Environment Variables
 - `OPENAI_API_KEY` - Required for AI risk analysis
+- `DEPLOYER_PRIVATE_KEY` - Required for on-chain smart account deployment (relay account that pays gas)
+- `SESSION_SECRET` - Session encryption key
 
 ### Running Locally
 ```bash
 npm run dev
 ```
 Server runs on port 5000 with Vite frontend.
+
+## Smart Account Deployment
+
+### How It Works
+1. **CREATE2 Deterministic Addresses**: Smart accounts are created with deterministic addresses using CREATE2
+2. **Manual Deployment**: Uses `getFactoryArgs()` from MetaMask Delegation Toolkit
+3. **Relay Account**: DEPLOYER_PRIVATE_KEY pays gas fees for deployment transactions
+4. **Verification**: Transaction receipt confirms on-chain deployment with block number and gas used
+
+### Security Features
+- **Zod Validation**: All deployment requests validated with address format checks
+- **Rate Limiting**: Max 3 deployments per minute per owner address
+- **Fail-Fast**: Server requires DEPLOYER_PRIVATE_KEY at startup (no random fallback)
+- **On-Chain Verification**: Deployment verified with transaction receipt before accepting
+
+### Deployment Flow
+1. User connects MetaMask wallet
+2. Smart account address generated (CREATE2)
+3. User clicks "Deploy to Monad" button
+4. Frontend sends request to `/api/smart-account/deploy`
+5. Backend validates request, checks rate limit
+6. Backend creates deployment transaction using `getFactoryArgs()`
+7. Relay account broadcasts transaction to Monad testnet
+8. Backend waits for transaction receipt
+9. Success dialog shows transaction hash, block number, gas used
+10. Button updates to "Deployed On-Chain" status
 
 ## Design System
 
