@@ -118,6 +118,23 @@ function AppContent() {
     }
   }, [toast]);
 
+  // Start backend monitoring for EOA + smart account automatically when available on Monad
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const addresses = [smartAccount?.address, account].filter(Boolean) as string[];
+        if (addresses.length === 0) return;
+        if (!isCorrectChain) return;
+        await fetch('/api/monitor/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses }),
+        }).catch(() => {});
+      } catch (_) {}
+    };
+    run();
+  }, [smartAccount, account, isCorrectChain]);
+
   // Real-time updates: prefer WebSocket; robustly fall back to polling on error/close or when running on Netlify
   useEffect(() => {
     if (!smartAccount) return;
