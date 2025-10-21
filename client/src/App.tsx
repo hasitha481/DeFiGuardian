@@ -73,48 +73,81 @@ function AppContent() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
-  // WebSocket connection for real-time updates
+  // Real-time updates: prefer WebSocket when running top-level; fall back to polling in iframes (Builder preview)
   useEffect(() => {
     if (!smartAccount) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const socket = new WebSocket(wsUrl);
+    const isInIframe = window.self !== window.top;
 
-    socket.onopen = () => {
-      setIsConnected(true);
-      socket.send(JSON.stringify({
-        type: "subscribe",
-        accountAddress: smartAccount.address,
-      }));
-    };
+    if (isInIframe) {
+      // Notify the user that wallet injection and websockets may not work inside Builder preview
+      toast({
+        title: "Preview Mode: Limited Wallet Support",
+        description:
+          "You're running inside Builder preview. MetaMask and real-time WebSocket updates may not work here. Open the app in a new tab to enable full wallet functionality.",
+      });
 
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      
-      if (message.type === "new_event") {
-        toast({
-          title: "New Risk Event Detected",
-          description: `${message.data.eventType} detected with risk score ${message.data.riskScore}`,
-        });
-        setIsIndexing(true);
-        setTimeout(() => setIsIndexing(false), 2000);
-        
+      // Poll backend periodically to simulate real-time updates in preview
+      const poll = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      } else if (message.type === "event_updated") {
-        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
-      }
-    };
+      }, 5000);
 
-    socket.onclose = () => {
-      setIsConnected(false);
-    };
+      return () => clearInterval(poll);
+    }
 
-    return () => {
-      socket.close();
-    };
+    // Not in iframe: attempt WebSocket connection
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        setIsConnected(true);
+        try {
+          socket.send(JSON.stringify({ type: "subscribe", accountAddress: smartAccount.address }));
+        } catch (err) {
+          console.warn("WebSocket send failed:", err);
+        }
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "new_event") {
+            toast({
+              title: "New Risk Event Detected",
+              description: `${message.data.eventType} detected with risk score ${message.data.riskScore}`,
+            });
+            setIsIndexing(true);
+            setTimeout(() => setIsIndexing(false), 2000);
+
+            queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+          } else if (message.type === "event_updated") {
+            queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+          }
+        } catch (err) {
+          console.warn("Invalid WebSocket message", err);
+        }
+      };
+
+      socket.onclose = () => setIsConnected(false);
+
+      return () => socket.close();
+    } catch (err) {
+      console.warn("Failed to create WebSocket, falling back to polling:", err);
+      const poll = setInterval(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+      }, 5000);
+
+      return () => clearInterval(poll);
+    }
   }, [smartAccount, toast]);
 
   const handleDisconnect = () => {
