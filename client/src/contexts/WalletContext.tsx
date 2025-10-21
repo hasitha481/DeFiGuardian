@@ -159,9 +159,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       // Some injected providers may throw when adding listeners; guard against it
-      if (typeof provider.on === "function") {
-        provider.on("accountsChanged", handleAccountsChanged);
-        provider.on("chainChanged", handleChainChanged);
+      if (typeof effectiveProvider.on === "function") {
+        effectiveProvider.on("accountsChanged", handleAccountsChanged);
+        effectiveProvider.on("chainChanged", handleChainChanged);
       }
     } catch (err) {
       console.warn("Failed to attach provider listeners:", err);
@@ -169,15 +169,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     return () => {
       try {
-        if (typeof provider.removeListener === "function") {
-          provider.removeListener("accountsChanged", handleAccountsChanged);
-          provider.removeListener("chainChanged", handleChainChanged);
+        if (typeof effectiveProvider.removeListener === "function") {
+          effectiveProvider.removeListener("accountsChanged", handleAccountsChanged);
+          effectiveProvider.removeListener("chainChanged", handleChainChanged);
         }
       } catch (err) {
         /* ignore */
       }
     };
-  }, [provider]);
+  }, [effectiveProvider]);
 
   const value: WalletContextValue = {
     connected,
