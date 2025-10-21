@@ -31,6 +31,7 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
   } = useWallet();
 
   const handleFullConnect = async () => {
+    console.error("[CRITICAL] handleFullConnect called - this proves click works");
     setIsProcessing(true);
     console.log("[WalletConnect] Button clicked, starting connection flow");
 
@@ -39,6 +40,7 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
     console.log("[WalletConnect] MetaMask detected:", hasMetaMask);
 
     if (!hasMetaMask) {
+      console.error("[CRITICAL] MetaMask not found - showing error toast");
       toast({
         title: "MetaMask Not Found",
         description: "Please install MetaMask browser extension and refresh the page.",
