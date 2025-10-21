@@ -11,9 +11,10 @@ import {
 
 interface WalletConnectButtonRealProps {
   onSmartAccountCreated?: () => void;
+  compact?: boolean; // Compact mode for header
 }
 
-export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnectButtonRealProps) {
+export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false }: WalletConnectButtonRealProps) {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -133,6 +134,33 @@ export function WalletConnectButtonReal({ onSmartAccountCreated }: WalletConnect
 
   const isLoading = connecting || isCreatingSmartAccount || isProcessing;
 
+  // Compact mode for header
+  if (compact) {
+    return (
+      <Button
+        onClick={handleFullConnect}
+        disabled={isLoading}
+        className="shadow-sm"
+        data-testid="button-wallet-connect"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {connecting ? "Connecting..." : 
+             isCreatingSmartAccount ? "Creating..." :
+             "Processing..."}
+          </>
+        ) : (
+          <>
+            <Wallet className="mr-2 h-4 w-4" />
+            Connect Wallet
+          </>
+        )}
+      </Button>
+    );
+  }
+
+  // Full mode for hero section
   return (
     <Button
       onClick={handleFullConnect}

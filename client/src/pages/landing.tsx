@@ -9,8 +9,8 @@ interface LandingPageProps {
 export default function LandingPage({ onSmartAccountCreated }: LandingPageProps) {
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
               <Shield className="h-6 w-6 text-primary-foreground" />
@@ -20,7 +20,7 @@ export default function LandingPage({ onSmartAccountCreated }: LandingPageProps)
               <p className="text-xs text-muted-foreground">AI-Powered Security</p>
             </div>
           </div>
-          <WalletConnectButtonReal onSmartAccountCreated={onSmartAccountCreated} />
+          <WalletConnectButtonReal compact onSmartAccountCreated={onSmartAccountCreated} />
         </div>
       </header>
 
