@@ -6,6 +6,33 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// CORS: allow requests from Builder preview and trusted fly.dev previews
+const allowedOrigins = new Set<string>([
+  "https://builder.io",
+  // The Fly preview domain seen in logs — add specific preview host if known
+  "https://cec21f27b18948d4812509f431fa07f5-0f144fc4168542bf9e7de4e3c.fly.dev",
+  // Allow additional origins via environment variable ALLOWED_ORIGINS (comma-separated)
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim()).filter(Boolean) : []),
+]);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin) {
+    // allow explicit origins or any fly.dev preview subdomain
+    if (allowedOrigins.has(origin) || origin.endsWith('.fly.dev')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+      }
+    }
+  }
+
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
