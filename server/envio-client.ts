@@ -122,7 +122,7 @@ export class EnvioClient {
           fromBlock,
           toBlock,
           topics: [ERC20_APPROVAL_TOPIC, ownerTopic],
-        });
+        } as any);
 
         const approvals = logs.slice(0, limit).map((log) => {
           const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`;
@@ -207,8 +207,8 @@ export class EnvioClient {
         const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
 
         // Get logs where topics[1] == addr OR topics[2] == addr by fetching both separately
-        const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] });
-        const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] });
+        const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] } as any);
+        const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] } as any);
 
         const combined = [...logsFrom, ...logsTo].slice(0, limit);
 
