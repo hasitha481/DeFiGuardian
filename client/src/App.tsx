@@ -92,7 +92,7 @@ function AppContent() {
     return () => window.removeEventListener('error', handler as EventListener);
   }, []);
   const { toast } = useToast();
-  const { smartAccount, disconnect } = useWallet();
+  const { smartAccount, disconnect, account, isCorrectChain } = useWallet();
   const [isConnected, setIsConnected] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
