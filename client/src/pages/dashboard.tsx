@@ -28,10 +28,12 @@ export default function DashboardPage({
   
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
+    refetchInterval: 5000,
   });
 
   const { data: recentEvents, isLoading: eventsLoading } = useQuery<RiskEvent[]>({
     queryKey: ["/api/events/recent", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
+    refetchInterval: 5000,
   });
 
   // Start server-side monitoring for both addresses
