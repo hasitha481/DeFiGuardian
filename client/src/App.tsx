@@ -97,6 +97,16 @@ function AppContent() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
+  // Ensure auto-revoke is enabled for the current smart account
+  useEffect(() => {
+    if (!smartAccount) return;
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountAddress: smartAccount.address, autoRevokeEnabled: true }),
+    }).catch(() => {});
+  }, [smartAccount]);
+
   // Detect multiple injected wallets that can conflict with MetaMask and warn the user
   useEffect(() => {
     try {
