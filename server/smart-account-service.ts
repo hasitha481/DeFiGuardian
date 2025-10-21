@@ -10,14 +10,11 @@ const publicClient = createPublicClient({
 });
 
 // Deployer account - pays gas fees for smart account deployments on Monad testnet
-if (!process.env.DEPLOYER_PRIVATE_KEY) {
-  throw new Error(
-    "DEPLOYER_PRIVATE_KEY environment variable is required. " +
-    "This private key funds smart account deployments on Monad testnet. " +
-    "Please set it to a wallet address with sufficient MON balance."
-  );
-}
+// Note: Do not throw at module import time — warn and defer runtime checks to functions
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+if (!DEPLOYER_PRIVATE_KEY) {
+  console.warn("DEPLOYER_PRIVATE_KEY not set — smart account deployment features will be disabled until configured.");
+}
 
 interface CreateSmartAccountParams {
   ownerAddress: Address;
@@ -57,6 +54,9 @@ export class SmartAccountService {
       );
 
       // Create deployer signer for creating smart account reference
+      if (!DEPLOYER_PRIVATE_KEY) {
+        throw new Error("DEPLOYER_PRIVATE_KEY environment variable is required to create smart accounts at runtime.");
+      }
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for creating smart account reference
@@ -147,6 +147,9 @@ export class SmartAccountService {
       );
 
       // Create deployer account (pays gas)
+      if (!DEPLOYER_PRIVATE_KEY) {
+        throw new Error("DEPLOYER_PRIVATE_KEY environment variable is required to deploy smart accounts at runtime.");
+      }
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for deployment
