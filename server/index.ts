@@ -15,6 +15,9 @@ const allowedOrigins = new Set<string>([
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim()).filter(Boolean) : []),
 ]);
 
+// If ALLOW_ALL_CORS or ENABLE_FLY_WILDCARD is true, echo any Origin
+const allowAllCors = (process.env.ALLOW_ALL_CORS === 'true') || (process.env.ENABLE_FLY_WILDCARD === 'true');
+
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;
   if (origin) {
@@ -23,11 +26,11 @@ app.use((req, res, next) => {
     const isFly = normalized.endsWith('.fly.dev');
     const isBuilder = normalized === 'https://builder.io' || normalized.endsWith('.builder.io');
 
-    if (isAllowedExplicit || isFly || isBuilder) {
+    if (allowAllCors || isAllowedExplicit || isFly || isBuilder) {
       // Echo back the incoming origin (more secure than using '*')
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,x-envio-secret');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       // Ensure caches differentiate responses based on Origin
       res.setHeader('Vary', 'Origin');
