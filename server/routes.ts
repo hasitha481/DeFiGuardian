@@ -190,6 +190,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Envio webhook to receive indexed events from Envio HyperIndex/HyperSync
+  // Expects JSON: { events: [ { type: 'approval'|'transfer', accountAddress, tokenAddress, tokenSymbol?, spenderAddress?, amount, txHash, blockNumber } ] }
+  app.post('/api/envio/webhook', async (req, res) => {
+    try {
+      const secret = process.env.ENVIO_WEBHOOK_SECRET;
+      const header = req.headers['x-envio-secret'] as string | undefined;
+      if (secret && header !== secret) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const payload = req.body as any;
+      if (!payload || !Array.isArray(payload.events)) {
+        return res.status(400).json({ error: 'Invalid payload' });
+      }
+
+      const created: any[] = [];
+
+      for (const ev of payload.events) {
+        try {
+          const eventType = (ev.type || ev.eventType || '').toLowerCase();
+          const accountAddress = (ev.accountAddress || ev.owner || ev.from || ev.to || ev.address || '').toLowerCase();
+          const tokenAddress = (ev.tokenAddress || ev.address || '').toLowerCase();
+          const tokenSymbol = ev.tokenSymbol || ev.symbol || null;
+          const spenderAddress = ev.spenderAddress || ev.spender || null;
+          const amount = ev.amount ? String(ev.amount) : (ev.value ? String(ev.value) : '0');
+          const txHash = ev.txHash || ev.transactionHash || ev.tx || null;
+          const blockNumber = ev.blockNumber ? String(ev.blockNumber) : (ev.block ? String(ev.block) : null);
+
+          if (!accountAddress || !tokenAddress) continue;
+
+          // run risk analysis
+          const whitelistedAddresses = (await storage.getUserSettings(accountAddress))?.whitelistedAddresses || [];
+          const risk = await analyzeRisk({
+            eventType: eventType === 'approval' ? 'approval' : 'transfer',
+            tokenSymbol: tokenSymbol || undefined,
+            spenderAddress: spenderAddress || undefined,
+            amount: amount,
+            accountAddress,
+            whitelistedAddresses,
+          });
+
+          // create risk event in storage
+          const insert: import('@shared/schema').InsertRiskEvent = {
+            accountAddress,
+            eventType: eventType === 'approval' ? 'approval' : 'transfer',
+            tokenAddress,
+            tokenSymbol: tokenSymbol || undefined,
+            spenderAddress: spenderAddress || undefined,
+            amount,
+            riskScore: risk.score,
+            riskLevel: risk.level,
+            aiReasoning: risk.reasoning,
+            txHash: txHash || undefined,
+            blockNumber: blockNumber || undefined,
+            status: 'detected',
+          };
+
+          const createdEvent = await storage.createRiskEvent(insert);
+
+          // broadcast via websocket
+          const clients = wsClients.get(accountAddress as string);
+          if (clients) {
+            const message = JSON.stringify({ type: 'new_event', data: createdEvent });
+            clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) client.send(message);
+            });
+          }
+
+          created.push(createdEvent);
+        } catch (err) {
+          console.error('Failed to process envio event:', err);
+        }
+      }
+
+      return res.json({ success: true, createdCount: created.length });
+    } catch (error) {
+      console.error('Envio webhook error:', error);
+      return res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  });
+
   // Risk Events Routes
   app.get("/api/events/:accountAddress", async (req, res) => {
     try {
