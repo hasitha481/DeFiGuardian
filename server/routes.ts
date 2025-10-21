@@ -18,6 +18,28 @@ import { deploySmartAccountSchema } from "@shared/schema";
 // WebSocket clients map
 const wsClients = new Map<string, Set<WebSocket>>();
 
+// Simple in-memory rate limiting for deployment endpoints
+const deploymentRateLimits = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_DEPLOYMENTS_PER_WINDOW = 3; // Max 3 deployments per minute per owner
+
+function checkRateLimit(ownerAddress: string): boolean {
+  const now = Date.now();
+  const timestamps = deploymentRateLimits.get(ownerAddress) || [];
+  
+  // Filter out old timestamps outside the window
+  const recentTimestamps = timestamps.filter(ts => now - ts < RATE_LIMIT_WINDOW_MS);
+  
+  if (recentTimestamps.length >= MAX_DEPLOYMENTS_PER_WINDOW) {
+    return false; // Rate limit exceeded
+  }
+  
+  // Add current timestamp and update map
+  recentTimestamps.push(now);
+  deploymentRateLimits.set(ownerAddress, recentTimestamps);
+  return true;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Smart Account Routes
   // Real smart account creation with Delegation Toolkit
@@ -82,6 +104,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { smartAccountAddress, ownerAddress } = validationResult.data;
+
+      // Check rate limit
+      if (!checkRateLimit(ownerAddress)) {
+        return res.status(429).json({ 
+          error: "Rate limit exceeded. Please wait before deploying again." 
+        });
+      }
 
       // Deploy smart account to Monad testnet
       const deploymentResult = await smartAccountService.deploySmartAccount({
