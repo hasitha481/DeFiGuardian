@@ -110,21 +110,25 @@ export class EnvioClient {
       // RPC fallback: query logs for Approval topic and filter by owner address
       try {
         const latest = await publicClient.getBlockNumber();
-        const fromBlockNum = Math.max(0, Number(latest) - 5000);
-        const toBlockNum = Number(latest);
-
-        const fromBlock = BigInt(fromBlockNum);
-        const toBlock = BigInt(toBlockNum);
-
         const ownerTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+        const windows = [5000, 2000, 1000, 200];
+        let logs: any[] = [];
+        for (const w of windows) {
+          try {
+            const fromBlock = BigInt(Math.max(0, Number(latest) - w));
+            const toBlock = BigInt(Number(latest));
+            logs = await publicClient.getLogs({
+              fromBlock,
+              toBlock,
+              topics: [ERC20_APPROVAL_TOPIC, ownerTopic],
+            } as any);
+            break;
+          } catch (_) {
+            continue;
+          }
+        }
 
-        const logs = await publicClient.getLogs({
-          fromBlock,
-          toBlock,
-          topics: [ERC20_APPROVAL_TOPIC, ownerTopic],
-        } as any);
-
-        const approvals = logs.slice(0, limit).map((log) => {
+        const approvals = (logs || []).slice(0, limit).map((log) => {
           const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`;
           const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`;
           const value = BigInt(log.data ?? '0');
@@ -198,19 +202,23 @@ export class EnvioClient {
       // RPC fallback: query logs for Transfer topic involving address as from or to
       try {
         const latest = await publicClient.getBlockNumber();
-        const fromBlockNum = Math.max(0, Number(latest) - 5000);
-        const toBlockNum = Number(latest);
-
-        const fromBlock = BigInt(fromBlockNum);
-        const toBlock = BigInt(toBlockNum);
-
         const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+        const windows = [5000, 2000, 1000, 200];
+        let combined: any[] = [];
+        for (const w of windows) {
+          try {
+            const fromBlock = BigInt(Math.max(0, Number(latest) - w));
+            const toBlock = BigInt(Number(latest));
+            const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] } as any);
+            const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] } as any);
+            combined = [...logsFrom, ...logsTo];
+            break;
+          } catch (_) {
+            continue;
+          }
+        }
 
-        // Get logs where topics[1] == addr OR topics[2] == addr by fetching both separately
-        const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] } as any);
-        const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] } as any);
-
-        const combined = [...logsFrom, ...logsTo].slice(0, limit);
+        combined = (combined || []).slice(0, limit);
 
         const transfers = combined.map((log) => {
           const from = `0x${(log.topics?.[1] ?? '').slice(26)}`;
