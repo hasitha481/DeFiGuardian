@@ -22,7 +22,7 @@ export interface IStorage {
   getRiskEvent(id: string): Promise<RiskEvent | undefined>;
   createRiskEvent(event: InsertRiskEvent): Promise<RiskEvent>;
   updateRiskEventStatus(id: string, status: string): Promise<void>;
-  eventExists(accountAddress: string, txHash: string | null, logIndex: number | null): Promise<boolean>;
+  eventExists(accountAddress: string, txHash: string | null): Promise<boolean>;
 
   // User Settings
   getUserSettings(accountAddress: string): Promise<UserSettings | undefined>;
@@ -126,10 +126,10 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async eventExists(accountAddress: string, txHash: string | null, logIndex: number | null): Promise<boolean> {
-    if (!txHash || logIndex == null) return false;
+  async eventExists(accountAddress: string, txHash: string | null): Promise<boolean> {
+    if (!txHash) return false;
     return Array.from(this.riskEvents.values()).some(
-      (e) => e.accountAddress.toLowerCase() === accountAddress.toLowerCase() && e.txHash === txHash && e.logIndex === logIndex,
+      (e) => e.accountAddress.toLowerCase() === accountAddress.toLowerCase() && e.txHash === txHash,
     );
   }
 
