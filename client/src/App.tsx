@@ -67,6 +67,30 @@ function Router({
 }
 
 function AppContent() {
+  // Suppress noisy wallet injection errors caused by other extensions running in Builder preview
+  useEffect(() => {
+    const handler = (evt: ErrorEvent) => {
+      try {
+        const msg = evt.message || '';
+        if (
+          msg.includes('Cannot redefine property: ethereum') ||
+          msg.includes('Failed to assign ethereum proxy') ||
+          msg.includes('Invalid property descriptor') ||
+          msg.includes('Cannot set property ethereum of')
+        ) {
+          // prevent console spam in preview; no-op
+          evt.preventDefault();
+          return true;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return false;
+    };
+
+    window.addEventListener('error', handler as EventListener);
+    return () => window.removeEventListener('error', handler as EventListener);
+  }, []);
   const { toast } = useToast();
   const { smartAccount, disconnect } = useWallet();
   const [isConnected, setIsConnected] = useState(false);
