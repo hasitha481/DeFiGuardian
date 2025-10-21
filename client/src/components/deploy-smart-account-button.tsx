@@ -57,9 +57,10 @@ export function DeploySmartAccountButton({
       
       // Invalidate queries to refresh account status
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats", smartAccountAddress] });
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-account", smartAccountAddress] });
       
       toast({
-        title: "Smart Account Deployed! 🎉",
+        title: "Smart Account Deployed",
         description: "Your smart account is now live on Monad testnet",
       });
     },

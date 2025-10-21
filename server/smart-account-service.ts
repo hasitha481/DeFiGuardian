@@ -10,8 +10,14 @@ const publicClient = createPublicClient({
 });
 
 // Deployer account - pays gas fees for smart account deployments on Monad testnet
-const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || 
-  "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+if (!process.env.DEPLOYER_PRIVATE_KEY) {
+  throw new Error(
+    "DEPLOYER_PRIVATE_KEY environment variable is required. " +
+    "This private key funds smart account deployments on Monad testnet. " +
+    "Please set it to a wallet address with sufficient MON balance."
+  );
+}
+const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 
 interface CreateSmartAccountParams {
   ownerAddress: Address;

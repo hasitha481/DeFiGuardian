@@ -13,6 +13,7 @@ import type {
   InsertAuditLog,
   DashboardStats,
 } from "@shared/schema";
+import { deploySmartAccountSchema } from "@shared/schema";
 
 // WebSocket clients map
 const wsClients = new Map<string, Set<WebSocket>>();
@@ -70,11 +71,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Deploy smart account on-chain
   app.post("/api/smart-account/deploy", async (req, res) => {
     try {
-      const { smartAccountAddress, ownerAddress } = req.body;
-
-      if (!smartAccountAddress || !ownerAddress) {
-        return res.status(400).json({ error: "Smart account address and owner address required" });
+      // Validate request body with Zod
+      const validationResult = deploySmartAccountSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Invalid request parameters",
+          details: validationResult.error.issues 
+        });
       }
+
+      const { smartAccountAddress, ownerAddress } = validationResult.data;
 
       // Deploy smart account to Monad testnet
       const deploymentResult = await smartAccountService.deploySmartAccount({

@@ -18,8 +18,15 @@ export const insertSmartAccountSchema = createInsertSchema(smartAccounts).omit({
   createdAt: true,
 });
 
+// Schema for smart account deployment request
+export const deploySmartAccountSchema = z.object({
+  smartAccountAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
+  ownerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
+});
+
 export type InsertSmartAccount = z.infer<typeof insertSmartAccountSchema>;
 export type SmartAccount = typeof smartAccounts.$inferSelect;
+export type DeploySmartAccountRequest = z.infer<typeof deploySmartAccountSchema>;
 
 // Risk Events schema (Approvals, Transfers detected by Envio)
 export const riskEvents = pgTable("risk_events", {
