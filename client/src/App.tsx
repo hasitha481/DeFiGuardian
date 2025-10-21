@@ -69,23 +69,23 @@ function Router({
 function AppContent() {
   // Suppress noisy wallet injection errors caused by other extensions running in Builder preview
   useEffect(() => {
-    const handler = (evt: ErrorEvent) => {
+    const handler = (evt: Event) => {
       try {
-        const msg = evt.message || '';
+        const e = evt as ErrorEvent;
+        const msg = e?.message || '';
         if (
           msg.includes('Cannot redefine property: ethereum') ||
           msg.includes('Failed to assign ethereum proxy') ||
           msg.includes('Invalid property descriptor') ||
           msg.includes('Cannot set property ethereum of')
         ) {
-          // prevent console spam in preview; no-op
-          evt.preventDefault();
-          return true;
+          // prevent console spam in preview; attempt to stop default handling
+          try { e.preventDefault(); } catch (_) {}
+          return;
         }
-      } catch (e) {
+      } catch (err) {
         // ignore
       }
-      return false;
     };
 
     window.addEventListener('error', handler as EventListener);
