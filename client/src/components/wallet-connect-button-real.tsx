@@ -91,6 +91,17 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
         console.log("[WalletConnect] Already on correct chain");
       }
 
+      // Start backend monitoring for the EOA immediately (auto-ingest, no manual input)
+      try {
+        if (account) {
+          await fetch('/api/monitor/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses: [account] }),
+          }).catch(() => {});
+        }
+      } catch (_) {}
+
       // Step 3: Create smart account
       if (!smartAccount && account) {
         console.log("[WalletConnect] Creating smart account for:", account);
