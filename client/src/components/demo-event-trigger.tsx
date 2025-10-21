@@ -77,7 +77,7 @@ export function DemoEventTrigger({ accountAddress }: DemoEventTriggerProps) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" data-testid="button-demo-event">
           <Zap className="h-4 w-4 mr-2" />
-          Simulate Event
+          Simulate / Ingest
         </Button>
       </DialogTrigger>
       <DialogContent>
