@@ -1,0 +1,410 @@
+# Build Prompt + Full Development Plan — **AI-Powered DeFi Guardian Agent**
+
+Below is a single, complete, copy-pasteable plan you can use yourself or give to an AI/code generator to build a fully operational, production-quality dApp that matches the hackathon requirements (MetaMask Smart Accounts + Delegation Toolkit + Monad testnet + Envio). It includes the full tech stack, step-by-step development guide, repo layout, CI/deploy instructions, testing checklist, demo plan, references (the links you supplied), and **ready-to-use AI prompts** for generating each component.
+
+Important: I cannot guarantee any software will be 100% bug-free. What I *can* give you is: a highly detailed reproducible plan, coding prompts, test plans and CI recipes to minimize mistakes and produce a robust working platform.
+
+---
+
+# 1 — One-Sentence Objective
+
+Build **AI-Powered DeFi Guardian Agent** — a smooth UX dApp where users create MetaMask Smart Accounts on Monad testnet, configure per-wallet risk thresholds, let an AI analyze real-time wallet events (via Envio HyperSync/HyperIndex), and then automatically revoke risky approvals or execute safety actions via delegated gasless transactions using the MetaMask Delegation Toolkit.
+
+---
+
+# 2 — Tech Stack (recommended)
+
+* Frontend: React + Next.js (TypeScript), SWR or React Query, Tailwind CSS (for polished UI), Headless UI for components, Framer Motion (subtle animations)
+* Wallet/AA: MetaMask SDK + **Delegation Toolkit SDK** (MetaMask Delegation Toolkit) — Smart Accounts (ERC-4337/7710)
+* Chain & RPC: **Monad testnet** (use official RPC from Monad docs & the testnet faucet)
+* Backend / Event Processor: Node.js (TypeScript) + Express or Fastify
+* Indexing: **Envio HyperSync / HyperIndex** (hosted/managed or local indexer as dev)
+* AI: OpenAI GPT (or local LLM like Llama-based via Hugging Face) for risk decisions — start with OpenAI free tier for hackathon demo; keep logic auditable.
+* Smart contract tooling: Hardhat (TypeScript) — for any helper contracts or tests
+* SDKs & libs: ethers.js, wagmi, @metamask/delegation-toolkit (follow docs), dotenv
+* DB / cache: Supabase or Firebase (free tier) — store user settings, event logs, audit trails
+* DevOps: Vercel for frontend, Render / Railway for backend (or Vercel serverless functions), GitHub Actions for CI/CD
+* Testing & QA: Jest + React Testing Library, Playwright / Cypress for E2E UI tests
+* Linting/formatting: ESLint, Prettier, TypeScript strict mode
+* Monitoring: Sentry (free tier) + GitHub issues automation
+* Video: Create 3–4 minute demo on YouTube showing main flow
+
+---
+
+# 3 — References (use these while building — you provided them)
+
+* HackQuest / Hackathon: [https://www.hackquest.io/hackathons/MetaMask-Smart-Accounts-x-Monad-Dev-Cook-Off](https://www.hackquest.io/hackathons/MetaMask-Smart-Accounts-x-Monad-Dev-Cook-Off)
+* MetaMask Delegation Toolkit docs (key pages):
+
+  * Get started: [https://docs.metamask.io/delegation-toolkit/get-started/install?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50519523-afbf08](https://docs.metamask.io/delegation-toolkit/get-started/install?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50519523-afbf08)
+  * Smart accounts quickstart: [https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08](https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08)
+  * Create & deploy smart account: [https://docs.metamask.io/delegation-toolkit/guides/smart-accounts/create-smart-account?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-4941957-afbf08](https://docs.metamask.io/delegation-toolkit/guides/smart-accounts/create-smart-account?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-4941957-afbf08)
+  * Send gasless transaction: [https://docs.metamask.io/delegation-toolkit/guides/smart-accounts/send-gasless-transaction?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-49719515-afbf08](https://docs.metamask.io/delegation-toolkit/guides/smart-accounts/send-gasless-transaction?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-49719515-afbf08)
+  * Concepts/delegation: [https://docs.metamask.io/delegation-toolkit/concepts/delegation?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50419522-afbf08](https://docs.metamask.io/delegation-toolkit/concepts/delegation?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50419522-afbf08)
+* Monad docs & testnet: [https://docs.monad.xyz/](https://docs.monad.xyz/), testnet RPC and deploy guides: [https://github.com/monad-developers/protocols/tree/main/testnet](https://github.com/monad-developers/protocols/tree/main/testnet) and [https://docs.monad.xyz/guides/deploy-smart-contract/](https://docs.monad.xyz/guides/deploy-smart-contract/)
+* Envio docs:
+
+  * HyperIndex overview: [https://docs.envio.dev/docs/HyperIndex/overview](https://docs.envio.dev/docs/HyperIndex/overview)
+  * HyperSync overview: [https://docs.envio.dev/docs/HyperSync/overview](https://docs.envio.dev/docs/HyperSync/overview)
+  * Monad testnet indexing: [https://docs.envio.dev/docs/HyperIndex/monad-testnet#indexing-monad-testnet-data-with-envio](https://docs.envio.dev/docs/HyperIndex/monad-testnet#indexing-monad-testnet-data-with-envio)
+  * Examples/tutorials: [https://docs.envio.dev/docs/HyperIndex/tutorial-op-bridge-deposits](https://docs.envio.dev/docs/HyperIndex/tutorial-op-bridge-deposits), [https://docs.envio.dev/blog/how-to-build-visualizers-and-dashboards-on-monad-using-envio](https://docs.envio.dev/blog/how-to-build-visualizers-and-dashboards-on-monad-using-envio)
+* Example Envio repo: [https://github.com/enviodev/scaffold-eth-2-extension](https://github.com/enviodev/scaffold-eth-2-extension)
+* MetaMask docs general: [https://docs.metamask.io/](https://docs.metamask.io/)
+* Delegation Toolkit CLI: [https://docs.metamask.io/delegation-toolkit/get-started/use-the-cli?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-4931952-afbf08](https://docs.metamask.io/delegation-toolkit/get-started/use-the-cli?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-4931952-afbf08)
+* MetaMask passkeys/tutorials (optional): [https://docs.metamask.io/tutorials/use-passkey-as-backup-signer?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50019519-afbf08](https://docs.metamask.io/tutorials/use-passkey-as-backup-signer?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50019519-afbf08)
+
+(You included many links — use them all as you implement specific features.)
+
+---
+
+# 4 — High-Level Architecture
+
+1. **Frontend (Next.js)**
+
+   * Pages: / (landing), /dashboard (wallet + risk feed), /settings (risk thresholds), /dev (debug + logs)
+   * Connects to MetaMask Smart Account via Delegation SDK and shows Smart Account details
+   * Shows live events from Envio via WebSocket or SSE and updates UI instantly
+   * Shows action logs and audit trail (revokes/swaps) and allows manual override.
+
+2. **Backend (Node.js / TypeScript)**
+
+   * Subscribes to Envio HyperSync / HyperIndex streams for indexed events (approvals, transfers) for user accounts
+   * Runs AI risk evaluation service (local or OpenAI) to compute a risk score when a new event arrives
+   * If risk > user threshold AND delegation exists => builds a gasless transaction (via Delegation SDK / Paymaster) to revoke approval or execute a safe swap to stablecoin; signs/relays via paymaster relayer or using the Delegation SDK send gasless TX mechanism.
+   * Stores event logs, decisions, and tx receipts in DB for audit.
+
+3. **Envio**
+
+   * Core: use HyperIndex to index Approval events, Transfer events, and user smart account activity on Monad testnet
+   * Provide webhook or GraphQL subscriptions to backend. Build queries that pull relevant events per user wallet address.
+
+4. **AI Module**
+
+   * Simple rule-based + ML hybrid for demo: start with deterministic rules (allowance > X, spender not in whitelist, new contract creation interation) + GPT prompt for contextual risk analysis (explainable output).
+   * Keep all decisions deterministic/recorded so judges can audit.
+
+5. **Delegation & Gasless Execution**
+
+   * Use Delegation Toolkit SDK to create an authorized delegator that can perform allowance revokes (`ERC20.approve(spender, 0)`) or safe swap via DEX router.
+   * Use paymaster pattern/gasless send as per docs to send transactions on behalf of the Smart Account.
+
+6. **Monitoring / UI**
+
+   * Audit trail (who did what, when) + revert/undo manual override + show costlessly that the action was performed on Monad testnet (tx hash link).
+
+---
+
+# 5 — Step-by-Step Implementation Guide (MVP plan + timeline)
+
+This is a prioritized plan to deliver an MVP in roughly **2–7 days** depending on team size. I’ll break it into Day 0..N tasks you can follow.
+
+## Preparation — Day 0 (1–2 hours)
+
+1. Clone a starter Next.js + Tailwind template (or use the Monad templates you linked). Example Monad templates: [https://docs.monad.xyz/templates/next-serwist-privy-embedded-wallet](https://docs.monad.xyz/templates/next-serwist-privy-embedded-wallet)
+2. Create GitHub repo (private or public) and set up branch protection and README.
+3. Create .env.example and set up GitHub Secrets for API keys (OpenAI, Envio API key, Monad RPCs, MetaMask SDK keys if needed).
+
+## Day 1 — Get Smart Accounts working (critical)
+
+1. Follow MetaMask Delegation Toolkit Quickstart: [https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08](https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08)
+2. On local dev (hardhat/fork or directly on Monad testnet), create a Smart Account instance for a test user using the SDK example code. Verify you can send a simple gasless tx using the example from `send-gasless-transaction`.
+3. Save the smart account address and show it in frontend. Ensure you can see txs on Monad testnet explorer (or using Envio indexing).
+
+**Deliverable**: Smart Account created and can send a gasless tx that updates a simple on-chain counter contract.
+
+## Day 2 — Envio Integration + Event Streaming
+
+1. Read Envio Monad testnet docs: [https://docs.envio.dev/docs/HyperIndex/monad-testnet#indexing-monad-testnet-data-with-envio](https://docs.envio.dev/docs/HyperIndex/monad-testnet#indexing-monad-testnet-data-with-envio)
+2. Create HyperIndex config to index `Approval` and `Transfer` events for ERC-20 tokens and activity for the Smart Account addresses. Use the example Uniswap/OP Bridge tutorials as reference.
+3. Run or register the indexer (hosted or local) and confirm you get events when test wallets approve tokens or transfer. Expose a webhook or GraphQL endpoint for the backend to subscribe.
+
+**Deliverable**: Backend receives real-time events for approvals and transfers from Envio.
+
+## Day 3 — Backend Event Handler + AI Decision Engine
+
+1. Build Node.js Express/Fastify backend that accepts Envio events.
+2. Create a risk evaluation function:
+
+   * Basic rules: `if approval.amount > threshold_percent_of_portfolio` or `spender not whitelisted` or `first interaction with that contract` then flag high risk.
+   * Add LLM step (OpenAI) for contextual reasoning: send a compact prompt summarizing the event and get a short human-sounding analysis. (Keep the prompt deterministic and log the model output.)
+3. Store events and risk decisions in DB (Supabase) for audit and UI.
+
+**Deliverable**: When an Approval event occurs, backend calculates risk and stores it.
+
+## Day 4 — Delegation Actions (Revokes & Safe Option)
+
+1. Integrate Delegation Toolkit functionality to perform revoke operations: build function that creates a gasless tx from the Smart Account to the target ERC-20 contract calling `approve(spender, 0)` or calling safeSwap to a stablecoin via router. Use the docs `send-gasless-transaction` guide.
+2. Add security: check delegations exist, that the delegator can perform allowed actions, and require user pre-authorized policy (for demo, have a checkbox: allow auto-revoke). Also add manual approval fallback in UI.
+3. Implement a relayer endpoint or use the Delegation SDK relaying pattern.
+
+**Deliverable**: Backend can auto-submit a revocation tx on detection of a high-risk approval.
+
+## Day 5 — Frontend UI, polished UX, theme toggle
+
+1. Build dashboard to show:
+
+   * Connected Smart Account and its balance (testnet tokens).
+   * Live event feed (from Envio via backend events / SSE).
+   * Risk score + model explanation for each event.
+   * Buttons: “Auto Revoke” toggle (global/user policy), per-event “Revoke now” manual button.
+2. Implement theme toggle (dark / light) using TailwindCSS `dark` class + store pref in localStorage & user profile. Add smooth animations (Framer Motion) and accessible components.
+3. Add settings page to set thresholds (e.g., revoke when exposure > N%) and whitelisted spenders.
+
+**Deliverable**: Nice-looking dashboard with dark/light mode.
+
+## Day 6 — Tests, E2E, CI
+
+1. Unit tests: risk logic, event parsing (Jest).
+2. E2E tests: Playwright or Cypress flows: connect wallet simulation (use mock RPC), create approval event, assert backend auto-revokes.
+3. CI: GitHub Actions to run tests, lint, build, and preview deploy.
+4. Deploy frontend to Vercel and backend to Render or Vercel serverless functions. Connect environment variables.
+
+**Deliverable**: Passing CI; deployed demo with test wallet walkthrough.
+
+## Day 7 — Polish, Audit, Submission assets
+
+1. Prepare README with architecture diagram, tech choices, and instructions to run locally.
+2. Create 3–4 minute demo video showing: onboarding → approval event → Envio detection → AI decision → auto revoke → tx receipts on Monad explorer. Host on YouTube.
+3. Prepare submission text on HackQuest with explicit mention of all required components (Smart Accounts, Delegation Toolkit, Envio, Monad testnet). Link GitHub and YouTube.
+
+---
+
+# 6 — Detailed Developer Tasks & Example Code Snippets
+
+> Below are *actionable* code patterns to follow. Replace placeholders with your values.
+
+### 6.1 Smart Account Creation (example pseudocode / snippet)
+
+```ts
+// src/lib/smartAccount.ts
+import { SmartAccount } from '@metamask/delegation-toolkit';
+import { ethers } from 'ethers';
+
+export async function createSmartAccount(provider: ethers.providers.Web3Provider) {
+  // init kit as per Delegation Toolkit quickstart
+  const signer = provider.getSigner();
+  const smartAccount = await SmartAccount.create({
+    signer,
+    chainId: <MONAD_CHAIN_ID>,
+    // follow docs for parameters and paymaster settings
+  });
+  return smartAccount;
+}
+```
+
+See: [https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08](https://docs.metamask.io/delegation-toolkit/get-started/smart-account-quickstart?utm_source=hackquest&utm_medium=content&utm_campaign=cmp-50319521-afbf08)
+
+### 6.2 Send Gasless Revoke (concept)
+
+```ts
+// backend/actions/revokeApproval.ts
+import { buildUserOp, sendUserOp } from '@metamask/delegation-toolkit';
+
+export async function revokeApproval(smartAccount, tokenAddress, spender) {
+  const iface = new ethers.utils.Interface(["function approve(address spender, uint256 amount)"]);
+  const data = iface.encodeFunctionData("approve", [spender, 0]);
+
+  const tx = {
+    to: tokenAddress,
+    data,
+    value: 0,
+  };
+
+  // build user op via SDK and send gasless
+  const userOp = await smartAccount.buildUserOp(tx);
+  const receipt = await smartAccount.sendUserOp(userOp);
+  return receipt;
+}
+```
+
+See: `send-gasless-transaction` docs.
+
+### 6.3 Envio Indexer config (example)
+
+Follow HyperIndex tutorial. Example indexing config for Approval events:
+
+```yaml
+# envio-config.yaml
+name: approvals-indexer
+chains:
+  - monad-testnet
+contracts:
+  - address: "0x..." # ERC20 tokens or wildcard
+events:
+  - name: "Approval"
+    signature: "Approval(address,address,uint256)"
+    handler: /webhook/approval
+```
+
+See: [https://docs.envio.dev/docs/HyperIndex/configuration-file](https://docs.envio.dev/docs/HyperIndex/configuration-file) and `monad-testnet` docs.
+
+### 6.4 AI Prompt Example (for risk evaluation)
+
+```text
+SYSTEM: You are a deterministic risk analyst. 
+When given a wallet event, output JSON: { risk_score: 0-100, reason: short text, recommended_action: ["revoke","monitor","notify","swap"] }.
+
+PROMPT: 
+User wallet: {{wallet_address}}
+Event type: {{Approval/Transfer/ContractInteraction}}
+Token: {{token_symbol}} ({{token_address}})
+Approval amount: {{amount}} (in token units)
+Current portfolio total in USD: {{portfolio_usd}}
+Recent first interaction with spender: {{is_first_interaction}} (true/false)
+Chain: Monad testnet
+
+Rules:
+- If approval amount > (portfolio_usd * threshold_percent) => risk_score >= 80 and recommended_action "revoke"
+- If spender not whitelisted and is_first_interaction true => risk_score 60-90
+- Otherwise risk_score < 50.
+
+Return only JSON with numeric risk_score, reason string and recommended_action.
+```
+
+Start with this deterministic template; after it works you can make the model more sophisticated.
+
+---
+
+# 7 — Security, Privacy & Audit Requirements
+
+* **Always require user opt-in** for auto actions. Provide UI to toggle global auto-revoke or per-spender policy.
+* **Audit logs**: store event, model decision, and tx receipts immutably in DB + show in UI. Provide export (CSV).
+* **No funds stored on your server**: never custody funds; use smart account delegations only.
+* **Key rotations & revocation**: show how user can revoke delegations via the UI or via delegation SDK CLI.
+* **Explainability**: always show model reasoning text (even if short). Judges favor transparency.
+* **Rate limit & relayer security**: if you run a relayer, secure keys and run it in server env only (no secrets in frontend).
+
+---
+
+# 8 — Tests & QA Checklist
+
+* Unit tests for risk logic (Jest).
+* Integration test: simulate Envio event → backend decision → built user op → stub sendUserOp returns success.
+* E2E: connect test wallet, send approval, check UI shows event, check auto-revoke executed.
+* Linting & type checks pass in CI.
+* Manual check: all user flows recorded in the demo video (onboard, approve, revoke).
+
+---
+
+# 9 — DevOps & CI/CD (GitHub Actions)
+
+Example jobs:
+
+* `lint` (ESLint + TypeScript compile)
+* `test` (Jest)
+* `build` (Next.js build)
+* `deploy` (Vercel for frontend on push to main; Render for backend)
+* `preview` (deploy preview on PR)
+
+Add secrets: `OPENAI_API_KEY`, `ENVIO_API_KEY`, `MONAD_RPC_URL`, `GANACHE_URL` (for local dev), `DB_URL`.
+
+---
+
+# 10 — UX / UI Requirements (Design brief)
+
+* Clean, minimal design; Tailwind UI.
+* Theme toggle: light/dark button persists in user profile & localStorage. Smooth transition (Framer Motion).
+* Key screens: Onboarding (explain what guardian does), Dashboard (risk feed), Event detail page (show model reasoning & tx actions), Settings (thresholds, whitelist), Audit log.
+* Accessibility: keyboard navigable, color contrast >= WCAG 2.1 AA.
+* Mobile-responsive: test at 360px & 412px widths.
+
+---
+
+# 11 — Demo Script & Submission Checklist
+
+**Demo script (3–4 minutes):**
+
+1. Show landing page (explain guardian features). (10s)
+2. Connect MetaMask Smart Account — create smart account (20s)
+3. In settings set threshold (e.g., 10%). (10s)
+4. Simulate a malicious approval from a test token (call approve from separate wallet) (20s)
+5. Show Envio indexer capturing event -> backend receives -> AI flags risk (20s)
+6. Show auto-revoke in UI and show tx receipt on Monad explorer. (30s)
+7. Show audit trail & explain whitelisting/override. (20s)
+8. Conclude & point to GitHub + instructions to replicate. (20s)
+
+**Submission checklist:**
+
+* [ ] GitHub repo public + README with quickstart
+* [ ] Deployed frontend + backend links
+* [ ] YouTube demo link included in HackQuest submission
+* [ ] Explicit mentions in submission: MetaMask Smart Accounts, Delegation Toolkit SDK, Envio HyperSync/HyperIndex, Monad testnet
+* [ ] Include how judges can reproduce: create test wallet, run the test approval to verify revocation.
+* [ ] Provide architecture diagram & short writeup of threat model & mitigation.
+
+---
+
+# 12 — Ready-to-Use AI Prompt(s)
+
+Below are **three** prompts you can paste to an advanced code generator AI (or give to a developer) to produce high-quality code. Adjust where necessary.
+
+## Prompt A — Build the Full Repo (monorepo)
+
+```text
+You are an expert full-stack Web3 developer. Build a complete monorepo for the "AI-Powered DeFi Guardian Agent" dApp. Requirements:
+
+1) Use Next.js (TypeScript) for frontend with Tailwind CSS and Framer Motion. Implement dark/light toggle stored in localStorage. Pages: /, /dashboard, /settings, /debug.
+2) Integrate MetaMask Delegation Toolkit SDK: create Smart Accounts on Monad testnet and show smart account address in UI. Follow official Delegation Toolkit docs for correct usage.
+3) Build backend Node.js (TypeScript) that subscribes to Envio HyperIndex or HyperSync events (Approvals/Transfers) for monitored wallets. The backend must accept webhooks or GraphQL subscriptions from Envio.
+4) Implement an AI decision service that runs on event reception. Start with deterministic rule engine and optionally call the OpenAI API to produce an explainable reasoning JSON: {risk_score, reason, recommended_action}.
+5) If risk_score >= user threshold, the backend must build and send a gasless user operation (UserOp) via the Delegation Toolkit to perform `approve(spender, 0)` on ERC20 token contract. Include code to log tx receipts and store decisions in Supabase (or chosen DB).
+6) Provide per-user settings persisted in DB (risk threshold %, whitelist, auto-revoke toggle).
+7) Provide secure relayer setup instructions (how to run the relayer to submit UserOps), but for hackathon demo you may use a local relayer or Delegation SDK demo relayer pattern.
+8) Linting, tests (Jest), Playwright E2E tests: at least one test that simulates an Approval -> Auto-Revoke flow (mock Envio if needed).
+9) CI: GitHub Actions workflow with lint/test/build and preview deploy steps.
+10) Provide README with architecture diagram, environment setup, and step-by-step local dev instructions. Use provided links to official docs: Delegation Toolkit, Monad testnet, Envio docs. Use environment variables for API keys.
+11) Output the full file/folder structure and code comments.
+
+Produce code files only (TypeScript/JSX/TS), shell commands for setup (npm/yarn), and exact configuration files (env.example, .github/workflows). Do not produce any fictional keys. Make the code copy-paste runnable and point to the referenced docs where a manual developer step is required.
+```
+
+## Prompt B — Build the Envio Indexer + Backend Connector
+
+```text
+You are an expert backend dev. Build a Node.js (TypeScript) backend service that:
+
+1) Uses Envio HyperIndex config to index Approval and Transfer events for a given list of token addresses and Smart Account wallets on Monad testnet.
+2) Exposes a webhook endpoint `/envio/webhook` to receive event records. Validate signature or token for security.
+3) On event: parse payload, compute risk with deterministic rules, call OpenAI only for human-readable reasoning, store decision in Supabase, and if risk >= threshold trigger revokeApproval function that builds a gasless UserOp via Delegation Toolkit and sends it to the chain using the relayer.
+4) Provide unit tests for event parsing and risk logic, and integration test that stubs Envio payloads.
+5) Include Dockerfile, README, and deployment instructions to Render.
+
+Write detailed code, env var names, and example Envio YAML config snippet.
+```
+
+## Prompt C — UI Component / Dashboard builder
+
+```text
+You are a frontend engineer. Build a polished dashboard in Next.js + Tailwind:
+
+1) Top nav: Connect Wallet (MetaMask), show smart account address, balance.
+2) Left sidebar: Dashboard, Settings, Audit log.
+3) Dashboard: live feed of events (SSE/WS from backend), each card showing event metadata, risk badge, AI reason, and action buttons (Manual Revoke, Whitelist, Inspect on Explorer).
+4) Settings: risk threshold slider (1–50%), auto-revoke toggle, whitelist management, theme toggle (dark/light).
+5) Accessible components, responsive, fluid animations. Create tests (React Testing Library) for main components.
+6) Provide step to deploy to Vercel with environment var examples.
+
+Return all code files and instructions.
+```
+
+---
+
+# 13 — Things I will not do (and why)
+
+* I cannot guarantee the code will be 100% free of runtime bugs — real testing and iterative QA are required. I provide tests and CI to mitigate this.
+* I will not connect to your private API keys or run anything in your cloud; you must supply keys in environment variables.
+* Security and audits: for production deployment a full security audit is strongly recommended — for hackathon demo the above mitigations suffice.
+
+---
+
+# 14 — Final Checklist to go live (short)
+
+* [ ] Smart Accounts + delegation demo on Monad testnet working.
+* [ ] Envio indexing returns Approval events.
+* [ ] Backend AI logic returns risk decisions and auto-revoke actions.
+* [ ] Frontend dashboard shows live feed, manual override and settings (with theme toggle).
+* [ ] Tests pass; CI deployed.
+* [ ] YouTube demo recorded and uploaded (3–4 min).
+* [ ] HackQuest submission filled with links and explicit mentions of MetaMask Delegation Toolkit, Envio HyperSync/HyperIndex, and Monad testnet.
+
+---
