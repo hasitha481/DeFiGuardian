@@ -17,7 +17,7 @@ export async function startMonitoringAddress(address: string) {
       ]);
 
       const processApproval = async (ev: any) => {
-        const exists = await storage.eventExists(addr, ev.transactionHash || null, ev.logIndex ?? null);
+        const exists = await storage.eventExists(addr, ev.transactionHash || null);
         if (exists) return;
         const risk = await analyzeRisk({
           eventType: 'approval',
@@ -44,7 +44,7 @@ export async function startMonitoringAddress(address: string) {
       };
 
       const processTransfer = async (ev: any) => {
-        const exists = await storage.eventExists(addr, ev.transactionHash || null, ev.logIndex ?? null);
+        const exists = await storage.eventExists(addr, ev.transactionHash || null);
         if (exists) return;
         const risk = await analyzeRisk({
           eventType: 'transfer',
