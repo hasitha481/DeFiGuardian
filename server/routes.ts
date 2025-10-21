@@ -790,61 +790,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Event missing required addresses" });
       }
 
-      // Get smart account to find owner address
+      // Try smart account gasless path; if not available, fall back to client-side revoke instruction
       const smartAccount = await storage.getSmartAccount(event.accountAddress);
       if (!smartAccount) {
-        return res.status(404).json({ error: "Smart account not found" });
+        // EOA event: ask client to revoke with their wallet
+        return res.status(202).json({
+          action: 'client_revoke_required',
+          tokenAddress: event.tokenAddress,
+          spenderAddress: event.spenderAddress,
+          ownerAddress: event.accountAddress,
+        });
       }
 
       console.log(`Executing gasless revoke for event ${eventId}...`);
 
-      // Execute gasless revocation via paymaster (user doesn't pay gas!)
-      const revokeResult = await transactionService.executeGaslessRevoke({
-        tokenAddress: event.tokenAddress as Address,
-        spenderAddress: event.spenderAddress as Address,
-        ownerAddress: smartAccount.ownerAddress as Address, // EOA owner
-        smartAccountAddress: event.accountAddress as Address, // Smart account contract
-      });
-
-      // Update event status
-      await storage.updateRiskEventStatus(eventId, "revoked");
-
-      // Create audit log with real transaction
-      await storage.createAuditLog({
-        accountAddress: event.accountAddress,
-        action: "revoke_approval",
-        eventId,
-        status: revokeResult.status === "confirmed" ? "success" : "pending",
-        details: {
-          manual: true,
-          gasless: true,
-          userOpHash: revokeResult.userOpHash,
-          message: "Gasless revocation via paymaster - user paid no gas fees",
-        },
-        txHash: revokeResult.txHash,
-      });
-
-      // Broadcast update
-      const clients = wsClients.get(event.accountAddress);
-      if (clients) {
-        const message = JSON.stringify({
-          type: "event_updated",
-          data: { eventId, status: "revoked", txHash: revokeResult.txHash },
+      try {
+        const revokeResult = await transactionService.executeGaslessRevoke({
+          tokenAddress: event.tokenAddress as Address,
+          spenderAddress: event.spenderAddress as Address,
+          ownerAddress: smartAccount.ownerAddress as Address,
+          smartAccountAddress: event.accountAddress as Address,
         });
-        clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
-          }
+
+        await storage.updateRiskEventStatus(eventId, "revoked");
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: revokeResult.status === "confirmed" ? "success" : "pending",
+          details: {
+            manual: true,
+            gasless: true,
+            userOpHash: revokeResult.userOpHash,
+            message: "Gasless revocation via paymaster - user paid no gas fees",
+          },
+          txHash: revokeResult.txHash,
+        });
+
+        const clients = wsClients.get(event.accountAddress);
+        if (clients) {
+          const message = JSON.stringify({ type: "event_updated", data: { eventId, status: "revoked", txHash: revokeResult.txHash } });
+          clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+        }
+
+        return res.json({ success: true, txHash: revokeResult.txHash, userOpHash: revokeResult.userOpHash, status: revokeResult.status, gasless: true });
+      } catch (e) {
+        // Gasless not available – ask client to perform wallet-based revoke
+        return res.status(202).json({
+          action: 'client_revoke_required',
+          tokenAddress: event.tokenAddress,
+          spenderAddress: event.spenderAddress,
+          ownerAddress: smartAccount.ownerAddress,
         });
       }
-
-      return res.json({
-        success: true,
-        txHash: revokeResult.txHash,
-        userOpHash: revokeResult.userOpHash,
-        status: revokeResult.status,
-        gasless: true,
-      });
     } catch (error) {
       console.error("Revoke error:", error);
       
