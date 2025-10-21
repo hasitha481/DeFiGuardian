@@ -25,8 +25,9 @@ app.use((req, res, next) => {
     const isAllowedExplicit = allowedOrigins.has(normalized) || allowedOrigins.has(origin);
     const isFly = normalized.endsWith('.fly.dev');
     const isBuilder = normalized === 'https://builder.io' || normalized.endsWith('.builder.io');
+    const isNetlify = normalized.endsWith('.netlify.app') || normalized.endsWith('.netlify.live');
 
-    if (allowAllCors || isAllowedExplicit || isFly || isBuilder) {
+    if (allowAllCors || isAllowedExplicit || isFly || isBuilder || isNetlify) {
       // Echo back the incoming origin (more secure than using '*')
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
