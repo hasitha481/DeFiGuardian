@@ -254,11 +254,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const event = await storage.createRiskEvent(eventData);
 
       // Check if auto-revoke is enabled and threshold exceeded
+      console.log(`[Auto-Revoke Check] Settings:`, {
+        autoRevokeEnabled: settings?.autoRevokeEnabled,
+        riskThreshold: settings?.riskThreshold,
+        riskScore: riskAnalysis.score,
+        hasSpender: !!spenderAddress,
+      });
+
       if (
         settings?.autoRevokeEnabled &&
         riskAnalysis.score > (settings.riskThreshold || 70) &&
         spenderAddress // Must have spender address for revocation
       ) {
+        console.log(`[Auto-Revoke] Triggering auto-revoke for event...`);
         try {
           // Get smart account to find owner address
           const smartAccount = await storage.getSmartAccount(accountAddress);
