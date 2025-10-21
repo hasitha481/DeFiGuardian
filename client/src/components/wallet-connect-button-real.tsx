@@ -32,21 +32,40 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
 
   const handleFullConnect = async () => {
     setIsProcessing(true);
-    
+    console.log("[WalletConnect] Button clicked, starting connection flow");
+
+    // Check if MetaMask is available
+    const hasMetaMask = !!(typeof window !== "undefined" && (window as any).ethereum);
+    console.log("[WalletConnect] MetaMask detected:", hasMetaMask);
+
+    if (!hasMetaMask) {
+      toast({
+        title: "MetaMask Not Found",
+        description: "Please install MetaMask browser extension and refresh the page.",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    }
+
     try {
       // Step 1: Connect MetaMask
       if (!connected) {
+        console.log("[WalletConnect] Initiating MetaMask connection");
         toast({
           title: "Connecting to MetaMask",
           description: "Please approve the connection request in MetaMask.",
         });
-        
+
         await connect();
-        
+        console.log("[WalletConnect] MetaMask connection successful");
+
         toast({
           title: "MetaMask Connected",
           description: "Now switching to Monad testnet...",
         });
+      } else {
+        console.log("[WalletConnect] Already connected to MetaMask");
       }
 
       // Step 2: Switch to Monad testnet
