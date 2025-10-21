@@ -820,8 +820,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const blockLogs = await publicClient.getLogs({
                 fromBlock,
                 toBlock,
-              });
-              logs = blockLogs.filter((l) => l.transactionHash === txHash);
+              } as any);
+              logs = blockLogs.filter((l) => l.transactionHash === (txHash as `0x${string}`));
             }
 
       // parse for Transfer/Approval topics
