@@ -59,11 +59,19 @@ export function DeploySmartAccountButton({
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Deployment Failed",
-        description: error.message || "Failed to deploy smart account. Please try again.",
-        variant: "destructive",
-      });
+      const msg = error.message || "Failed to deploy smart account. Please try again.";
+      if (msg.includes('already deployed')) {
+        toast({
+          title: "Already Deployed",
+          description: "This smart account is already deployed on-chain.",
+        });
+      } else {
+        toast({
+          title: "Deployment Failed",
+          description: msg,
+          variant: "destructive",
+        });
+      }
     },
   });
 
