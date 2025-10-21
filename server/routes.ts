@@ -207,6 +207,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Ingest a specific transaction hash and create risk events from its logs
+  app.post('/api/monitor/ingest-tx', async (req, res) => {
+    try {
+      const { txHash, addresses } = req.body as { txHash?: string; addresses?: string[] };
+      if (!txHash || typeof txHash !== 'string') {
+        return res.status(400).json({ error: 'txHash required' });
+      }
+
+      const client = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
+      const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+
+      const APPROVAL = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+      const addrSet = new Set((addresses || []).map((a) => a.toLowerCase()));
+      const created: any[] = [];
+
+      for (const log of receipt.logs || []) {
+        try {
+          const topic0 = log.topics?.[0];
+          if (!topic0) continue;
+          if (topic0 === APPROVAL) {
+            const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`.toLowerCase();
+            const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`.toLowerCase();
+            const value = BigInt(log.data ?? '0');
+            const accountAddress = addrSet.size > 0 ? ([...addrSet].find((a) => a === owner) || owner) : owner;
+
+            const whitelisted = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
+            const risk = await analyzeRisk({
+              eventType: 'approval',
+              tokenSymbol: undefined,
+              spenderAddress: spender,
+              amount: value.toString(),
+              accountAddress,
+              whitelistedAddresses: whitelisted,
+            });
+
+            const event = await storage.createRiskEvent({
+              accountAddress,
+              eventType: 'approval',
+              tokenAddress: log.address?.toLowerCase() || '',
+              tokenSymbol: undefined,
+              spenderAddress: spender,
+              amount: value.toString(),
+              riskScore: risk.score,
+              riskLevel: risk.level,
+              aiReasoning: risk.reasoning,
+              txHash: log.transactionHash || receipt.transactionHash,
+              blockNumber: String(log.blockNumber ?? receipt.blockNumber ?? 0n),
+              status: 'detected',
+            });
+
+            created.push(event);
+            const clients = wsClients.get(accountAddress);
+            if (clients) {
+              const message = JSON.stringify({ type: 'new_event', data: event });
+              clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+            }
+          } else if (topic0 === TRANSFER) {
+            const from = `0x${(log.topics?.[1] ?? '').slice(26)}`.toLowerCase();
+            const to = `0x${(log.topics?.[2] ?? '').slice(26)}`.toLowerCase();
+            const value = BigInt(log.data ?? '0');
+            const candidate = addrSet.size > 0 ? ([...addrSet].find((a) => a === from || a === to) || from) : from;
+            const accountAddress = candidate;
+
+            const whitelisted = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
+            const risk = await analyzeRisk({
+              eventType: 'transfer',
+              tokenSymbol: undefined,
+              spenderAddress: undefined,
+              amount: value.toString(),
+              accountAddress,
+              whitelistedAddresses: whitelisted,
+            });
+
+            const event = await storage.createRiskEvent({
+              accountAddress,
+              eventType: 'transfer',
+              tokenAddress: log.address?.toLowerCase() || '',
+              tokenSymbol: undefined,
+              spenderAddress: undefined,
+              amount: value.toString(),
+              riskScore: risk.score,
+              riskLevel: risk.level,
+              aiReasoning: risk.reasoning,
+              txHash: log.transactionHash || receipt.transactionHash,
+              blockNumber: String(log.blockNumber ?? receipt.blockNumber ?? 0n),
+              status: 'detected',
+            });
+
+            created.push(event);
+            const clients = wsClients.get(accountAddress);
+            if (clients) {
+              const message = JSON.stringify({ type: 'new_event', data: event });
+              clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to parse log from tx:', receipt.transactionHash, e);
+        }
+      }
+
+      return res.json({ success: true, events: created });
+    } catch (err) {
+      console.error('ingest-tx error:', err);
+      return res.status(500).json({ error: 'Failed to ingest tx' });
+    }
+  });
+
   // Dashboard Stats (supports comma-separated addresses)
   app.get("/api/dashboard/stats/:accountAddress", async (req, res) => {
     try {
