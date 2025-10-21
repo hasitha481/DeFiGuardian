@@ -18,12 +18,20 @@ const allowedOrigins = new Set<string>([
 app.use((req, res, next) => {
   const origin = req.headers.origin as string | undefined;
   if (origin) {
-    // allow explicit origins or any fly.dev preview subdomain
-    if (allowedOrigins.has(origin) || origin.endsWith('.fly.dev')) {
+    const normalized = origin.toLowerCase();
+    const isAllowedExplicit = allowedOrigins.has(normalized) || allowedOrigins.has(origin);
+    const isFly = normalized.endsWith('.fly.dev');
+    const isBuilder = normalized === 'https://builder.io' || normalized.endsWith('.builder.io');
+
+    if (isAllowedExplicit || isFly || isBuilder) {
+      // Echo back the incoming origin (more secure than using '*')
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
+      // Ensure caches differentiate responses based on Origin
+      res.setHeader('Vary', 'Origin');
+
       if (req.method === 'OPTIONS') {
         return res.sendStatus(204);
       }
