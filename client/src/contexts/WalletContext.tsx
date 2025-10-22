@@ -173,8 +173,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(text || "Failed to create smart account");
+        // Try to extract meaningful error message from JSON first, then text
+        let message = "Failed to create smart account";
+        try {
+          const data = await response.clone().json();
+          message = (data && (data.error || data.message)) ? (data.error || data.message) : message;
+        } catch (_) {
+          try {
+            const text = await response.text();
+            if (text) message = text;
+          } catch (_) {}
+        }
+        throw new Error(message);
       }
 
       const account = await response.json();
