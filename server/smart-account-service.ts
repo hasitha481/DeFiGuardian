@@ -61,7 +61,7 @@ export class SmartAccountService {
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for creating smart account reference
-      const walletClient = createWalletClient({
+      const walletClient = viem.createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
         transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
@@ -154,7 +154,7 @@ export class SmartAccountService {
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for deployment
-      const walletClient = createWalletClient({
+      const walletClient = viem.createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
         transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
