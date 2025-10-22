@@ -23,17 +23,17 @@ import type { SmartAccount } from "@shared/schema";
 import type { Address } from "viem";
 
 function Router({
-  smartAccount,
+  address,
   onRevoke,
   onIgnore,
   onWhitelist,
 }: {
-  smartAccount: SmartAccount | null;
+  address: string | null;
   onRevoke: (eventId: string) => void;
   onIgnore: (eventId: string) => void;
   onWhitelist: (address: string) => void;
 }) {
-  if (!smartAccount) {
+  if (!address) {
     return null;
   }
 
@@ -41,7 +41,7 @@ function Router({
     <Switch>
       <Route path="/">
         <DashboardPage
-          smartAccountAddress={smartAccount.address}
+          smartAccountAddress={address}
           onRevoke={onRevoke}
           onIgnore={onIgnore}
           onWhitelist={onWhitelist}
@@ -49,17 +49,17 @@ function Router({
       </Route>
       <Route path="/activity">
         <ActivityPage
-          smartAccountAddress={smartAccount.address}
+          smartAccountAddress={address}
           onRevoke={onRevoke}
           onIgnore={onIgnore}
           onWhitelist={onWhitelist}
         />
       </Route>
       <Route path="/settings">
-        <SettingsPage smartAccountAddress={smartAccount.address} />
+        <SettingsPage smartAccountAddress={address} />
       </Route>
       <Route path="/audit">
-        <AuditPage smartAccountAddress={smartAccount.address} />
+        <AuditPage smartAccountAddress={address} />
       </Route>
       <Route component={NotFound} />
     </Switch>
@@ -97,15 +97,16 @@ function AppContent() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
-  // Ensure auto-revoke is enabled for the current smart account
+  // Ensure auto-revoke is enabled for the active address (smart account or EOA)
   useEffect(() => {
-    if (!smartAccount) return;
+    const active = smartAccount?.address || account;
+    if (!active) return;
     fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountAddress: smartAccount.address, autoRevokeEnabled: true }),
+      body: JSON.stringify({ accountAddress: active, autoRevokeEnabled: true }),
     }).catch(() => {});
-  }, [smartAccount]);
+  }, [smartAccount, account]);
 
   // Detect multiple injected wallets that can conflict with MetaMask and warn the user
   useEffect(() => {
@@ -128,11 +129,11 @@ function AppContent() {
     }
   }, [toast]);
 
-  // Start backend monitoring for EOA + smart account automatically when available on Monad
+  // Start backend monitoring for the active address automatically when on Monad
   useEffect(() => {
     const run = async () => {
       try {
-        const addresses = [smartAccount?.address, account].filter(Boolean) as string[];
+        const addresses = [smartAccount?.address || account].filter(Boolean) as string[];
         if (addresses.length === 0) return;
         if (!isCorrectChain) return;
         await fetch('/api/monitor/start', {
@@ -147,7 +148,8 @@ function AppContent() {
 
   // Real-time updates: prefer WebSocket; robustly fall back to polling on error/close or when running on Netlify
   useEffect(() => {
-    if (!smartAccount) return;
+    const activeAddress = smartAccount?.address || account;
+    if (!activeAddress) return;
 
     const startPolling = () => {
       setIsConnected(true); // consider polling as connected monitoring
@@ -184,7 +186,7 @@ function AppContent() {
       socket.onopen = () => {
         setIsConnected(true);
         try {
-          socket.send(JSON.stringify({ type: "subscribe", accountAddress: smartAccount.address }));
+          socket.send(JSON.stringify({ type: "subscribe", accountAddress: activeAddress }));
         } catch (err) {
           console.warn("WebSocket send failed:", err);
         }
@@ -246,14 +248,15 @@ function AppContent() {
   };
 
   const handleCopyAddress = async () => {
-    if (!smartAccount) return;
-    
+    const active = smartAccount?.address || account;
+    if (!active) return;
+
     try {
-      await navigator.clipboard.writeText(smartAccount.address);
+      await navigator.clipboard.writeText(active);
       setCopiedAddress(true);
       toast({
         title: "Address Copied",
-        description: "Smart account address copied to clipboard",
+        description: "Address copied to clipboard",
       });
       setTimeout(() => setCopiedAddress(false), 2000);
     } catch (error) {
@@ -374,13 +377,8 @@ function AppContent() {
     }
   };
 
-  if (!smartAccount) {
-    return <LandingPage onSmartAccountCreated={() => {
-      toast({
-        title: "Smart Account Created",
-        description: "Your DeFi Guardian is now active and monitoring!",
-      });
-    }} />;
+  if (!account) {
+    return <LandingPage onSmartAccountCreated={() => {}} />;
   }
 
   const sidebarStyle = {
@@ -407,15 +405,15 @@ function AppContent() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="font-mono text-xs text-muted-foreground cursor-help">
-                        {smartAccount.address.slice(0, 6)}...{smartAccount.address.slice(-4)}
+                        {(smartAccount?.address || account)?.slice(0, 6)}...{(smartAccount?.address || account)?.slice(-4)}
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="font-mono text-xs">{smartAccount.address}</p>
+                      <p className="font-mono text-xs">{smartAccount?.address || account}</p>
                     </TooltipContent>
                   </Tooltip>
                   <div className="text-xs text-muted-foreground">
-                    {smartAccount.balance} MON
+                    {smartAccount?.balance ?? "-"} MON
                   </div>
                 </div>
                 <Button
@@ -446,7 +444,7 @@ function AppContent() {
           <main className="flex-1 overflow-auto p-6">
             <div className="max-w-7xl mx-auto">
               <Router
-                smartAccount={smartAccount}
+                address={smartAccount?.address || account || null}
                 onRevoke={handleRevoke}
                 onIgnore={handleIgnore}
                 onWhitelist={handleWhitelist}
