@@ -29,8 +29,8 @@ interface SmartAccountResult {
 }
 
 interface DeploySmartAccountParams {
-  smartAccountAddress: Address;
-  ownerAddress: Address;
+  smartAccountAddress: viem.Address;
+  ownerAddress: viem.Address;
 }
 
 interface DeploymentResult {
