@@ -44,6 +44,21 @@ function checkRateLimit(ownerAddress: string): boolean {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Smart Account Routes
+  // Get smart account details/status
+  app.get("/api/smart-account/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const account = await storage.getSmartAccount(address.toLowerCase());
+      if (!account) {
+        return res.status(404).json({ error: "Smart account not found" });
+      }
+      return res.json(account);
+    } catch (error) {
+      console.error("Smart account fetch error:", error);
+      return res.status(500).json({ error: "Failed to fetch smart account" });
+    }
+  });
+
   // Real smart account creation with Delegation Toolkit
   app.post("/api/smart-account/create", async (req, res) => {
     try {
