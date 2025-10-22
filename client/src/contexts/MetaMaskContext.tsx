@@ -27,9 +27,16 @@ export function MetaMaskProvider({ children }: MetaMaskProviderProps) {
   const dappUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     const here = window.location.origin;
-    const publicOrigin = (typeof window !== "undefined" && (window as any).__PUBLIC_APP_URL__) || process.env.PUBLIC_APP_URL;
-    return publicOrigin || here;
-  }, []);
+    if (publicUrl && typeof publicUrl === "string") {
+      try {
+        const parsed = new URL(publicUrl);
+        return parsed.origin;
+      } catch (_) {
+        return publicUrl;
+      }
+    }
+    return here;
+  }, [publicUrl]);
 
   const iconUrl = useMemo(() => (dappUrl ? `${dappUrl}/icon.png` : ""), [dappUrl]);
 
