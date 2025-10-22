@@ -1,6 +1,5 @@
 import { createPublicClient, createWalletClient, http, type Address, keccak256, encodePacked } from "viem";
-import { createPublicClient, createWalletClient, encodePacked, http, keccak256 } from "viem";
-import type { Address } from "viem";
+import * as viem from "viem";
 import { monadTestnet } from "../client/src/lib/chains";
 import { Implementation, toMetaMaskSmartAccount } from "@metamask/delegation-toolkit";
 import { privateKeyToAccount } from "viem/accounts";
