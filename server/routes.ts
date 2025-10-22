@@ -68,20 +68,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Owner address required" });
       }
 
-      // Client MUST precompute the smart account address using MetaMask
-      // Server-side creation is not supported due to MetaMask Delegation Toolkit requirements
-      if (!precomputedAddress || typeof precomputedAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(precomputedAddress)) {
-        return res.status(400).json({
-          error: "Smart account address computation failed on client",
-          message: "Please ensure MetaMask is installed, unlocked, and connected to Monad Testnet"
-        });
-      }
+      let smartAccountData;
+      const isValidAddr = typeof precomputedAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(precomputedAddress);
 
-      // Validate and use the client-precomputed address
-      const smartAccountData = await smartAccountService.validateSmartAccount(
-        precomputedAddress as Address,
-        ownerAddress as Address
-      );
+      if (isValidAddr) {
+        // Validate the client-precomputed address
+        smartAccountData = await smartAccountService.validateSmartAccount(
+          precomputedAddress as Address,
+          ownerAddress as Address
+        );
+      } else {
+        // Fallback: compute counterfactual address on the server (requires DEPLOYER_PRIVATE_KEY)
+        smartAccountData = await smartAccountService.createSmartAccount({ ownerAddress: ownerAddress as Address });
+      }
 
       const account = await storage.createSmartAccount({
         address: smartAccountData.address,
