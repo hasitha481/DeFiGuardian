@@ -1,3 +1,0 @@
-/api/* https://cec21f27b18948d4812509f431fa07f5-0f144fc4168542bf9e7de4e3c.fly.dev/api/:splat 200!
-/ws wss://cec21f27b18948d4812509f431fa07f5-0f144fc4168542bf9e7de4e3c.fly.dev/ws 200!
-/*   /index.html   200
