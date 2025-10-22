@@ -203,7 +203,7 @@ export class EnvioClient {
       try {
         const latest = await publicClient.getBlockNumber();
         const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
-        const windows = [5000, 2000, 1000, 200];
+        const windows = [20000, 10000, 5000, 2000, 1000, 200];
         let combined: any[] = [];
         for (const w of windows) {
           try {
@@ -212,7 +212,7 @@ export class EnvioClient {
             const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] } as any);
             const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] } as any);
             combined = [...logsFrom, ...logsTo];
-            break;
+            if ((combined?.length || 0) > 0) break;
           } catch (_) {
             continue;
           }
