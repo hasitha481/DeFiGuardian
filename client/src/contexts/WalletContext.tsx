@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useSDK } from "@metamask/sdk-react";
 import { monadTestnet } from "@/lib/chains";
 import type { SmartAccount } from "@shared/schema";
+import { createPublicClient, createWalletClient, http, custom, type Address, keccak256, encodePacked } from "viem";
+import { Implementation, toMetaMaskSmartAccount } from "@metamask/delegation-toolkit";
 
 interface WalletContextValue {
   // MetaMask SDK state
@@ -166,10 +168,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         console.warn("createSmartAccount called inside iframe; MetaMask may not work in this environment.");
       }
 
+      // Try to precompute the smart account address client-side using the user's MetaMask wallet
+      let precomputedAddress: string | undefined = undefined;
+      try {
+        const pubClient = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
+        const eth = (window as any).ethereum;
+        if (eth) {
+          const walletClient = createWalletClient({
+            account: ownerAddress as Address,
+            chain: monadTestnet,
+            transport: custom(eth),
+          });
+          const deterministicSalt = keccak256(encodePacked(['address'], [ownerAddress as Address]));
+          const sa = await toMetaMaskSmartAccount({
+            client: pubClient,
+            implementation: Implementation.Hybrid,
+            deployParams: [ownerAddress as Address, [], [], []],
+            deploySalt: deterministicSalt,
+            signer: { walletClient },
+          });
+          precomputedAddress = sa.address;
+        }
+      } catch (e) {
+        console.warn('Client-side smart account precompute failed; will fall back to server', e);
+      }
+
       const response = await fetch("/api/smart-account/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ownerAddress }),
+        body: JSON.stringify({ ownerAddress, precomputedAddress }),
       });
 
       if (!response.ok) {
