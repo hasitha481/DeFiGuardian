@@ -50,8 +50,8 @@ export class SmartAccountService {
       const { ownerAddress } = params;
 
       // Generate deterministic salt based on owner address (CREATE2 pattern)
-      const deterministicSalt = keccak256(
-        encodePacked(['address'], [ownerAddress])
+      const deterministicSalt = viem.keccak256(
+        viem.encodePacked(['address'], [ownerAddress])
       );
 
       // Create deployer signer for creating smart account reference
@@ -143,8 +143,8 @@ export class SmartAccountService {
       }
 
       // Generate deterministic salt (same as creation)
-      const deterministicSalt = keccak256(
-        encodePacked(['address'], [ownerAddress])
+      const deterministicSalt = viem.keccak256(
+        viem.encodePacked(['address'], [ownerAddress])
       );
 
       // Create deployer account (pays gas)
