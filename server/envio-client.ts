@@ -128,7 +128,7 @@ export class EnvioClient {
           }
         }
 
-        const approvals = (logs || []).slice(0, limit).map((log) => {
+        const approvals = (logs || []).map((log) => {
           const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`;
           const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`;
           const value = BigInt(log.data ?? '0');
@@ -142,7 +142,9 @@ export class EnvioClient {
             logIndex: Number(log.logIndex ?? 0),
             tokenAddress: log.address ?? "",
           };
-        });
+        })
+        .sort((a, b) => (b.blockNumber - a.blockNumber) || (b.logIndex - a.logIndex))
+        .slice(0, limit);
 
         return approvals;
       } catch (err) {
@@ -218,23 +220,24 @@ export class EnvioClient {
           }
         }
 
-        combined = (combined || []).slice(0, limit);
-
-        const transfers = combined.map((log) => {
-          const from = `0x${(log.topics?.[1] ?? '').slice(26)}`;
-          const to = `0x${(log.topics?.[2] ?? '').slice(26)}`;
-          const value = BigInt(log.data ?? '0');
-          return {
-            from: from.toLowerCase(),
-            to: to.toLowerCase(),
-            value,
-            blockNumber: Number(log.blockNumber ?? 0),
-            timestamp: 0,
-            transactionHash: log.transactionHash ?? "",
-            logIndex: Number(log.logIndex ?? 0),
-            tokenAddress: log.address ?? "",
-          };
-        });
+        const transfers = (combined || [])
+          .map((log) => {
+            const from = `0x${(log.topics?.[1] ?? '').slice(26)}`;
+            const to = `0x${(log.topics?.[2] ?? '').slice(26)}`;
+            const value = BigInt(log.data ?? '0');
+            return {
+              from: from.toLowerCase(),
+              to: to.toLowerCase(),
+              value,
+              blockNumber: Number(log.blockNumber ?? 0),
+              timestamp: 0,
+              transactionHash: log.transactionHash ?? "",
+              logIndex: Number(log.logIndex ?? 0),
+              tokenAddress: log.address ?? "",
+            };
+          })
+          .sort((a, b) => (b.blockNumber - a.blockNumber) || (b.logIndex - a.logIndex))
+          .slice(0, limit);
 
         return transfers;
       } catch (err) {
