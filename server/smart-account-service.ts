@@ -11,7 +11,6 @@ const publicClient = viem.createPublicClient({
 });
 
 // Deployer account - pays gas fees for smart account deployments on Monad testnet
-// Note: Do not throw at module import time — warn and defer runtime checks to functions
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 if (!DEPLOYER_PRIVATE_KEY) {
   console.warn("DEPLOYER_PRIVATE_KEY not set — smart account deployment features will be disabled until configured.");
@@ -42,8 +41,36 @@ interface DeploymentResult {
 
 export class SmartAccountService {
   /**
+   * Validates that a smart account address is valid and returns its details
+   * The address should be precomputed by the client using MetaMask
+   */
+  async validateSmartAccount(address: viem.Address, ownerAddress: viem.Address): Promise<SmartAccountResult> {
+    try {
+      // Check if account is deployed
+      const isDeployed = await this.isAccountDeployed(address);
+      
+      console.log(`Smart account ${address} for owner ${ownerAddress}. Deployed: ${isDeployed}`);
+
+      // Get balance
+      const balance = await publicClient.getBalance({ 
+        address,
+      });
+
+      return {
+        address,
+        ownerAddress,
+        balance: balance.toString(),
+        isDeployed,
+      };
+    } catch (error) {
+      console.error("Error validating smart account:", error);
+      throw new Error(`Failed to validate smart account: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Creates a MetaMask smart account for the owner address using Delegation Toolkit
-   * Uses deterministic CREATE2 salt for stable addresses
+   * This is now a client-side operation - server only validates
    */
   async createSmartAccount(params: CreateSmartAccountParams): Promise<SmartAccountResult> {
     try {
