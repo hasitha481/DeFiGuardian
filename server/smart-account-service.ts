@@ -18,7 +18,7 @@ if (!DEPLOYER_PRIVATE_KEY) {
 }
 
 interface CreateSmartAccountParams {
-  ownerAddress: Address;
+  ownerAddress: viem.Address;
 }
 
 interface SmartAccountResult {
