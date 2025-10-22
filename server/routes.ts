@@ -103,7 +103,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(account);
     } catch (error) {
       console.error("Smart account creation error:", error);
-      return res.status(500).json({ error: "Failed to create smart account" });
+      return res.status(500).json({
+        error: error instanceof Error ? error.message : "Failed to create smart account"
+      });
     }
   });
 
