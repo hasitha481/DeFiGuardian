@@ -83,13 +83,13 @@ export class SmartAccountService {
       });
 
       // Check if account is already deployed
-      const isDeployed = await this.isAccountDeployed(smartAccount.address as Address);
+      const isDeployed = await this.isAccountDeployed(smartAccount.address as viem.Address);
       
       console.log(`Smart account ${smartAccount.address} created (counterfactual address). Deployed: ${isDeployed}`);
 
       // Get balance
       const balance = await publicClient.getBalance({ 
-        address: smartAccount.address as Address,
+        address: smartAccount.address as viem.Address,
       });
 
       return {
