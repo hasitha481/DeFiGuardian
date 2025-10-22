@@ -1,0 +1,29 @@
+[build]
+  command = "npm run build"
+  publish = "dist/public"
+
+# Proxy API calls to the existing Fly backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://cec21f27b18948d4812509f431fa07f5-0f144fc4168542bf9e7de4e3c.fly.dev/api/:splat"
+  status = 200
+  force = true
+
+# Proxy WebSocket to Fly backend
+[[redirects]]
+  from = "/ws"
+  to = "wss://cec21f27b18948d4812509f431fa07f5-0f144fc4168542bf9e7de4e3c.fly.dev/ws"
+  status = 200
+  force = true
+
+# Single Page App fallback for client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# CORS headers for static assets (API CORS handled by backend)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"

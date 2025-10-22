@@ -4,7 +4,7 @@ import type { RiskAnalysis } from "@shared/schema";
 // Reference to the javascript_openai blueprint integration
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 export interface RiskEventInput {
   eventType: string;
@@ -53,9 +53,11 @@ export async function analyzeRisk(input: RiskEventInput): Promise<RiskAnalysis> 
       recommendations.push("Verify spender contract");
     }
 
-    // Use AI for contextual analysis
-    const prompt = `Analyze this DeFi transaction for security risks:
-    
+    // Use AI for contextual analysis (only if OPENAI_API_KEY is present)
+    let aiAnalysis: any = {};
+    if (openai) {
+      const prompt = `Analyze this DeFi transaction for security risks:
+
 Event Type: ${input.eventType}
 Token: ${input.tokenSymbol || "Unknown"}
 Spender: ${input.spenderAddress || "N/A"}
@@ -65,23 +67,26 @@ Provide a brief risk assessment (2-3 sentences) explaining potential security co
 
 Respond in JSON format: { "reasoning": string, "additionalRecommendations": string[] }`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5",
-      messages: [
-        {
-          role: "system",
-          content: "You are a DeFi security expert analyzing blockchain transactions for potential risks. Provide clear, actionable insights.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_completion_tokens: 512,
-    });
+      const response = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "system",
+            content: "You are a DeFi security expert analyzing blockchain transactions for potential risks. Provide clear, actionable insights.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 512,
+      });
 
-    const aiAnalysis = JSON.parse(response.choices[0].message.content || "{}");
+      aiAnalysis = JSON.parse(response.choices[0].message.content || "{}");
+    } else {
+      // AI not available; proceed with rule-based analysis only
+    }
     
     // Combine AI analysis with rule-based scoring
     const finalScore = Math.min(100, Math.max(0, baseScore));

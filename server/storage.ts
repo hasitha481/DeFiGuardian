@@ -18,9 +18,11 @@ export interface IStorage {
 
   // Risk Events
   getRiskEvents(accountAddress: string): Promise<RiskEvent[]>;
+  getRiskEventsFor(addresses: string[]): Promise<RiskEvent[]>;
   getRiskEvent(id: string): Promise<RiskEvent | undefined>;
   createRiskEvent(event: InsertRiskEvent): Promise<RiskEvent>;
   updateRiskEventStatus(id: string, status: string): Promise<void>;
+  eventExists(accountAddress: string, txHash: string | null): Promise<boolean>;
 
   // User Settings
   getUserSettings(accountAddress: string): Promise<UserSettings | undefined>;
@@ -83,6 +85,13 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }
 
+  async getRiskEventsFor(addresses: string[]): Promise<RiskEvent[]> {
+    const set = new Set(addresses.map((a) => a.toLowerCase()));
+    return Array.from(this.riskEvents.values())
+      .filter((event) => set.has(event.accountAddress.toLowerCase()))
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
   async getRiskEvent(id: string): Promise<RiskEvent | undefined> {
     return this.riskEvents.get(id);
   }
@@ -100,8 +109,8 @@ export class MemStorage implements IStorage {
       riskScore: insertEvent.riskScore,
       riskLevel: insertEvent.riskLevel,
       aiReasoning: insertEvent.aiReasoning ?? null,
-      txHash: insertEvent.txHash,
-      blockNumber: insertEvent.blockNumber,
+      txHash: insertEvent.txHash ?? null,
+      blockNumber: insertEvent.blockNumber ?? null,
       status: insertEvent.status || "detected",
       timestamp: new Date(),
     };
@@ -115,6 +124,13 @@ export class MemStorage implements IStorage {
       event.status = status;
       this.riskEvents.set(id, event);
     }
+  }
+
+  async eventExists(accountAddress: string, txHash: string | null): Promise<boolean> {
+    if (!txHash) return false;
+    return Array.from(this.riskEvents.values()).some(
+      (e) => e.accountAddress.toLowerCase() === accountAddress.toLowerCase() && e.txHash === txHash,
+    );
   }
 
   // User Settings

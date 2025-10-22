@@ -19,6 +19,9 @@ export function MetaMaskProvider({ children }: MetaMaskProviderProps) {
         },
         checkInstallationImmediately: false,
         preferDesktop: true,
+        // Prevent SDK from redefining window.ethereum when an extension already injected it
+        injectProvider: false,
+        shouldShimWeb3: false,
       }}
     >
       {children}

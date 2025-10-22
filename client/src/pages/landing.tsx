@@ -1,6 +1,7 @@
 import { Shield, Zap, Brain, Lock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WalletConnectButtonReal } from "@/components/wallet-connect-button-real";
+import OpenInNewTab from "@/components/open-in-new-tab";
 
 interface LandingPageProps {
   onSmartAccountCreated?: () => void;
@@ -42,6 +43,10 @@ export default function LandingPage({ onSmartAccountCreated }: LandingPageProps)
             <div className="flex gap-4 justify-center flex-wrap">
               <div className="flex-1 max-w-md">
                 <WalletConnectButtonReal onSmartAccountCreated={onSmartAccountCreated} />
+              </div>
+
+              <div className="flex-1 max-w-md flex items-center justify-center">
+                <OpenInNewTab />
               </div>
             </div>
           </div>

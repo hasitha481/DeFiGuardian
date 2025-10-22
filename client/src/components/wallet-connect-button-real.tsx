@@ -31,65 +31,110 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
   } = useWallet();
 
   const handleFullConnect = async () => {
+    console.error("[CRITICAL] handleFullConnect called - this proves click works");
     setIsProcessing(true);
-    
+    console.log("[WalletConnect] Button clicked, starting connection flow");
+
+    // Check if MetaMask is available (ignore other wallets)
+    const win = typeof window !== "undefined" ? (window as any) : undefined;
+    const metaMaskProvider = win?.ethereum?.providers?.find((p: any) => p && p.isMetaMask) || (win?.ethereum?.isMetaMask ? win.ethereum : undefined);
+    const hasMetaMask = !!metaMaskProvider;
+    console.log("[WalletConnect] MetaMask detected:", hasMetaMask);
+
+    if (!hasMetaMask) {
+      console.error("[CRITICAL] MetaMask not found (other wallets detected). Showing install prompt.");
+      toast({
+        title: "MetaMask Required",
+        description: "Please install the MetaMask extension (disable Backpack/Razor/Nightly) and refresh.",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    }
+
     try {
       // Step 1: Connect MetaMask
       if (!connected) {
+        console.log("[WalletConnect] Initiating MetaMask connection");
         toast({
           title: "Connecting to MetaMask",
           description: "Please approve the connection request in MetaMask.",
         });
-        
+
         await connect();
-        
+        console.log("[WalletConnect] MetaMask connection successful");
+
         toast({
           title: "MetaMask Connected",
           description: "Now switching to Monad testnet...",
         });
+      } else {
+        console.log("[WalletConnect] Already connected to MetaMask");
       }
 
       // Step 2: Switch to Monad testnet
       if (!isCorrectChain) {
+        console.log("[WalletConnect] Switching to Monad testnet, isCorrectChain:", isCorrectChain);
         toast({
           title: "Switching Network",
           description: "Please approve the network switch in MetaMask.",
         });
-        
+
         await switchToMonad();
-        
+        console.log("[WalletConnect] Network switch successful");
+
         toast({
           title: "Network Switched",
           description: "Connected to Monad testnet. Creating smart account...",
         });
+      } else {
+        console.log("[WalletConnect] Already on correct chain");
       }
+
+      // Start backend monitoring for the EOA immediately (auto-ingest, no manual input)
+      try {
+        if (account) {
+          await fetch('/api/monitor/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses: [account] }),
+          }).catch(() => {});
+        }
+      } catch (_) {}
 
       // Step 3: Create smart account
       if (!smartAccount && account) {
+        console.log("[WalletConnect] Creating smart account for:", account);
         toast({
           title: "Creating Smart Account",
           description: "Setting up your MetaMask smart account with delegation capabilities...",
         });
-        
+
         await createSmartAccount(account);
-        
+        console.log("[WalletConnect] Smart account created successfully");
+
         toast({
           title: "Smart Account Created",
           description: "Your DeFi Guardian is now active and monitoring!",
         });
-        
+
         onSmartAccountCreated?.();
+      } else {
+        console.log("[WalletConnect] Smart account already exists or no account connected", { smartAccount, account });
       }
     } catch (error: any) {
-      console.error("Connection error:", error);
-      
+      console.error("[WalletConnect] Connection error:", error);
+      const errorMsg = error?.message || "Failed to complete setup. Please try again.";
+      console.error("[WalletConnect] Error message:", errorMsg);
+
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to complete setup. Please try again.",
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
+      console.log("[WalletConnect] Connection flow completed");
     }
   };
 

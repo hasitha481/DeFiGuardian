@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useWallet } from "@/contexts/WalletContext";
 import { RiskEventCard } from "@/components/risk-event-card";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,8 +32,12 @@ export default function ActivityPage({
   const [riskFilter, setRiskFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  const { account: connectedAddress } = useWallet();
+
+  const combined = connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress;
   const { data: events, isLoading } = useQuery<RiskEvent[]>({
-    queryKey: ["/api/events", smartAccountAddress],
+    queryKey: ["/api/events", combined],
+    refetchInterval: 5000,
   });
 
   const filteredEvents = events?.filter((event) => {

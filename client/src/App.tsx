@@ -67,54 +67,174 @@ function Router({
 }
 
 function AppContent() {
+  // Suppress noisy wallet injection errors caused by other extensions running in Builder preview
+  useEffect(() => {
+    const handler = (evt: Event) => {
+      try {
+        const e = evt as ErrorEvent;
+        const msg = e?.message || '';
+        if (
+          msg.includes('Cannot redefine property: ethereum') ||
+          msg.includes('Failed to assign ethereum proxy') ||
+          msg.includes('Invalid property descriptor') ||
+          msg.includes('Cannot set property ethereum of')
+        ) {
+          // prevent console spam in preview; attempt to stop default handling
+          try { e.preventDefault(); } catch (_) {}
+          return;
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('error', handler as EventListener);
+    return () => window.removeEventListener('error', handler as EventListener);
+  }, []);
   const { toast } = useToast();
-  const { smartAccount, disconnect } = useWallet();
+  const { smartAccount, disconnect, account, isCorrectChain } = useWallet();
   const [isConnected, setIsConnected] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
-  // WebSocket connection for real-time updates
+  // Ensure auto-revoke is enabled for the current smart account
+  useEffect(() => {
+    if (!smartAccount) return;
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountAddress: smartAccount.address, autoRevokeEnabled: true }),
+    }).catch(() => {});
+  }, [smartAccount]);
+
+  // Detect multiple injected wallets that can conflict with MetaMask and warn the user
+  useEffect(() => {
+    try {
+      const win = window as any;
+      const providers = win?.ethereum?.providers;
+      if (Array.isArray(providers) && providers.length > 1) {
+        const hasMetaMask = providers.some((p: any) => p && p.isMetaMask);
+        const others = providers.filter((p: any) => !p?.isMetaMask).length;
+        if (hasMetaMask && others > 0) {
+          toast({
+            title: "Multiple Wallet Extensions Detected",
+            description:
+              "We detected several wallet extensions (e.g., Backpack, Razor, Nightly). For reliable connection, disable non-MetaMask wallets or set MetaMask as default.",
+          });
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+  }, [toast]);
+
+  // Start backend monitoring for EOA + smart account automatically when available on Monad
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const addresses = [smartAccount?.address, account].filter(Boolean) as string[];
+        if (addresses.length === 0) return;
+        if (!isCorrectChain) return;
+        await fetch('/api/monitor/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ addresses }),
+        }).catch(() => {});
+      } catch (_) {}
+    };
+    run();
+  }, [smartAccount, account, isCorrectChain]);
+
+  // Real-time updates: prefer WebSocket; robustly fall back to polling on error/close or when running on Netlify
   useEffect(() => {
     if (!smartAccount) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      setIsConnected(true);
-      socket.send(JSON.stringify({
-        type: "subscribe",
-        accountAddress: smartAccount.address,
-      }));
-    };
-
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      
-      if (message.type === "new_event") {
-        toast({
-          title: "New Risk Event Detected",
-          description: `${message.data.eventType} detected with risk score ${message.data.riskScore}`,
-        });
-        setIsIndexing(true);
-        setTimeout(() => setIsIndexing(false), 2000);
-        
+    const startPolling = () => {
+      setIsConnected(true); // consider polling as connected monitoring
+      const poll = setInterval(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      } else if (message.type === "event_updated") {
-        queryClient.invalidateQueries({ queryKey: ["/api/events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+      }, 5000);
+      return poll;
+    };
+
+    const isInIframe = window.self !== window.top;
+    const isNetlify = /netlify\.app$/i.test(window.location.host);
+
+    if (isInIframe || isNetlify) {
+      if (isInIframe) {
+        toast({
+          title: "Preview Mode: Limited Wallet Support",
+          description:
+            "You're running inside Builder preview. MetaMask and real-time WebSocket updates may not work here. Open the app in a new tab to enable full wallet functionality.",
+        });
       }
-    };
+      const poll = startPolling();
+      return () => clearInterval(poll);
+    }
 
-    socket.onclose = () => {
-      setIsConnected(false);
-    };
+    let pollHandle: any;
+    try {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const socket = new WebSocket(wsUrl);
 
-    return () => {
-      socket.close();
-    };
+      socket.onopen = () => {
+        setIsConnected(true);
+        try {
+          socket.send(JSON.stringify({ type: "subscribe", accountAddress: smartAccount.address }));
+        } catch (err) {
+          console.warn("WebSocket send failed:", err);
+        }
+      };
+
+      socket.onerror = (e) => {
+        console.warn("WebSocket error, switching to polling:", e);
+        try { socket.close(); } catch (_) {}
+        if (!pollHandle) pollHandle = startPolling();
+      };
+
+      socket.onclose = () => {
+        setIsConnected(false);
+        if (!pollHandle) pollHandle = startPolling();
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "new_event") {
+            toast({
+              title: "New Risk Event Detected",
+              description: `${message.data.eventType} detected with risk score ${message.data.riskScore}`,
+            });
+            setIsIndexing(true);
+            setTimeout(() => setIsIndexing(false), 2000);
+
+            queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+          } else if (message.type === "event_updated") {
+            queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
+          }
+        } catch (err) {
+          console.warn("Invalid WebSocket message", err);
+        }
+      };
+
+      return () => {
+        try { socket.close(); } catch (_) {}
+        if (pollHandle) clearInterval(pollHandle);
+      };
+    } catch (err) {
+      console.warn("Failed to create WebSocket, falling back to polling:", err);
+      const poll = startPolling();
+      return () => clearInterval(poll);
+    }
   }, [smartAccount, toast]);
 
   const handleDisconnect = () => {
@@ -149,41 +269,49 @@ function AppContent() {
     if (!smartAccount) return;
 
     try {
-      toast({
-        title: "Processing Revocation",
-        description: "Executing gasless transaction - you won't pay any gas fees!",
-      });
+      toast({ title: "Processing Revocation", description: "Attempting gasless auto-revoke..." });
 
-      // Execute gasless revocation via paymaster (no MetaMask signature needed!)
       const response = await fetch("/api/events/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId }),
       });
 
-      if (!response.ok) {
+      if (response.status === 202) {
+        // Fallback: perform client-side revoke using MetaMask
+        const data = await response.json();
+        toast({ title: "Signature Required", description: "Please approve the revoke in MetaMask." });
+        const result = await transactionClient.revokeApproval({
+          tokenAddress: data.tokenAddress as Address,
+          spenderAddress: data.spenderAddress as Address,
+          ownerAddress: data.ownerAddress as Address,
+        } as any);
+
+        // Confirm on server (verifies allowance is zero)
+        await fetch("/api/events/revoke-confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId, txHash: result.txHash, status: result.status }),
+        }).catch(() => {});
+
+        toast({ title: "Approval Revoked", description: `Hash: ${result.txHash.slice(0, 10)}...` });
+      } else if (response.ok) {
+        const result = await response.json();
+        toast({ title: "Approval Revoked (Gasless)", description: `${result.txHash ? `Hash: ${result.txHash.slice(0, 10)}...` : ""}` });
+      } else {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to revoke approval");
       }
 
-      const result = await response.json();
-
-      toast({
-        title: "Approval Revoked (Gasless!)",
-        description: `Transaction confirmed! No gas fees paid. ${result.txHash ? `Hash: ${result.txHash.slice(0, 10)}...` : ""}`,
-      });
-
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events/recent"] });
       queryClient.invalidateQueries({ queryKey: ["/api/audit"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
     } catch (error) {
       console.error("Revocation error:", error);
       toast({
         title: "Revocation Failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to revoke approval. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to revoke approval.",
         variant: "destructive",
       });
     }

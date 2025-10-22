@@ -11,15 +11,21 @@
 
 import HyperSync from "@envio-dev/hypersync-client";
 import { monadTestnet } from "../client/src/lib/chains";
+import { createPublicClient, http } from 'viem';
 
 // Envio HyperSync endpoint for Monad testnet
 // Note: Replace with actual Envio GraphQL endpoint once indexer is deployed
-const ENVIO_GRAPHQL_ENDPOINT = process.env.ENVIO_GRAPHQL_ENDPOINT || 
-  "https://indexer.envio.dev/v1/graphql";  // Placeholder
+const ENVIO_GRAPHQL_ENDPOINT = process.env.ENVIO_GRAPHQL_ENDPOINT || "";  // empty => use RPC fallback
 
 // ERC-20 event signatures
 const ERC20_APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
 const ERC20_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+// RPC public client for Monad (fallback when Envio not configured)
+const publicClient = createPublicClient({
+  chain: monadTestnet,
+  transport: http(monadTestnet.rpcUrls.default.http[0]),
+});
 
 export interface ApprovalEvent {
   owner: string;
@@ -94,12 +100,55 @@ export class EnvioClient {
         limit,
       };
 
-      // Note: In production, this would query the actual Envio GraphQL endpoint
-      // For now, returning mock data to demonstrate integration structure
+      // If ENVIO_GRAPHQL_ENDPOINT is configured we would query it. Otherwise use RPC fallback
       console.log(`[Envio] Querying approvals for ${accountAddress} (limit: ${limit})`);
-      
-      // Mock response for demonstration (replace with actual GraphQL query)
-      return this.getMockApprovals(accountAddress, limit);
+      if (ENVIO_GRAPHQL_ENDPOINT) {
+        // TODO: implement real GraphQL query against Envio endpoint
+        return this.getMockApprovals(accountAddress, limit);
+      }
+
+      // RPC fallback: query logs for Approval topic and filter by owner address
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const ownerTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+        const windows = [20000, 10000, 5000, 2000, 1000, 200];
+        let logs: any[] = [];
+        for (const w of windows) {
+          try {
+            const fromBlock = BigInt(Math.max(0, Number(latest) - w));
+            const toBlock = BigInt(Number(latest));
+            logs = await publicClient.getLogs({
+              fromBlock,
+              toBlock,
+              topics: [ERC20_APPROVAL_TOPIC, ownerTopic],
+            } as any);
+            if ((logs?.length || 0) > 0) break;
+          } catch (_) {
+            continue;
+          }
+        }
+
+        const approvals = (logs || []).slice(0, limit).map((log) => {
+          const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`;
+          const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`;
+          const value = BigInt(log.data ?? '0');
+          return {
+            owner: owner.toLowerCase(),
+            spender: spender.toLowerCase(),
+            value,
+            blockNumber: Number(log.blockNumber ?? 0),
+            timestamp: 0, // RPC logs don't include timestamp; resolve if needed
+            transactionHash: log.transactionHash ?? "",
+            logIndex: Number(log.logIndex ?? 0),
+            tokenAddress: log.address ?? "",
+          };
+        });
+
+        return approvals;
+      } catch (err) {
+        console.error('RPC fallback getRecentApprovals failed:', err);
+        return [];
+      }
     } catch (error) {
       console.error("Error fetching approvals from Envio:", error);
       return [];
@@ -145,9 +194,53 @@ export class EnvioClient {
       };
 
       console.log(`[Envio] Querying transfers for ${accountAddress} (limit: ${limit})`);
-      
-      // Mock response for demonstration (replace with actual GraphQL query)
-      return this.getMockTransfers(accountAddress, limit);
+      if (ENVIO_GRAPHQL_ENDPOINT) {
+        // TODO: implement real GraphQL query against Envio endpoint
+        return this.getMockTransfers(accountAddress, limit);
+      }
+
+      // RPC fallback: query logs for Transfer topic involving address as from or to
+      try {
+        const latest = await publicClient.getBlockNumber();
+        const addrTopic = `0x${accountAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0')}`;
+        const windows = [20000, 10000, 5000, 2000, 1000, 200];
+        let combined: any[] = [];
+        for (const w of windows) {
+          try {
+            const fromBlock = BigInt(Math.max(0, Number(latest) - w));
+            const toBlock = BigInt(Number(latest));
+            const logsFrom = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, addrTopic] } as any);
+            const logsTo = await publicClient.getLogs({ fromBlock, toBlock, topics: [ERC20_TRANSFER_TOPIC, null, addrTopic] } as any);
+            combined = [...logsFrom, ...logsTo];
+            if ((combined?.length || 0) > 0) break;
+          } catch (_) {
+            continue;
+          }
+        }
+
+        combined = (combined || []).slice(0, limit);
+
+        const transfers = combined.map((log) => {
+          const from = `0x${(log.topics?.[1] ?? '').slice(26)}`;
+          const to = `0x${(log.topics?.[2] ?? '').slice(26)}`;
+          const value = BigInt(log.data ?? '0');
+          return {
+            from: from.toLowerCase(),
+            to: to.toLowerCase(),
+            value,
+            blockNumber: Number(log.blockNumber ?? 0),
+            timestamp: 0,
+            transactionHash: log.transactionHash ?? "",
+            logIndex: Number(log.logIndex ?? 0),
+            tokenAddress: log.address ?? "",
+          };
+        });
+
+        return transfers;
+      } catch (err) {
+        console.error('RPC fallback getRecentTransfers failed:', err);
+        return [];
+      }
     } catch (error) {
       console.error("Error fetching transfers from Envio:", error);
       return [];

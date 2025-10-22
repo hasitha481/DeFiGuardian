@@ -6,6 +6,8 @@ import { analyzeRisk } from "./ai-risk-analyzer";
 import { smartAccountService } from "./smart-account-service";
 import { transactionService } from "./transaction-service";
 import type { Address } from "viem";
+import { createPublicClient, http } from 'viem';
+import { monadTestnet } from "../client/src/lib/chains";
 import type {
   InsertSmartAccount,
   InsertRiskEvent,
@@ -42,6 +44,21 @@ function checkRateLimit(ownerAddress: string): boolean {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Smart Account Routes
+  // Get smart account details/status
+  app.get("/api/smart-account/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const account = await storage.getSmartAccount(address.toLowerCase());
+      if (!account) {
+        return res.status(404).json({ error: "Smart account not found" });
+      }
+      return res.json(account);
+    } catch (error) {
+      console.error("Smart account fetch error:", error);
+      return res.status(500).json({ error: "Failed to fetch smart account" });
+    }
+  });
+
   // Real smart account creation with Delegation Toolkit
   app.post("/api/smart-account/create", async (req, res) => {
     try {
@@ -107,9 +124,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check rate limit
       if (!checkRateLimit(ownerAddress)) {
-        return res.status(429).json({ 
-          error: "Rate limit exceeded. Please wait before deploying again." 
+        return res.status(429).json({
+          error: "Rate limit exceeded. Please wait before deploying again."
         });
+      }
+
+      // If account already exists in storage assume deployed and return 409
+      const existing = await storage.getSmartAccount(smartAccountAddress.toLowerCase());
+      if (existing) {
+        return res.status(409).json({ error: "Smart account is already deployed on-chain" });
       }
 
       // Deploy smart account to Monad testnet
@@ -118,14 +141,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ownerAddress: ownerAddress as Address,
       });
 
-      // Update account status in storage
+      // Update account status in storage (create only if not exists)
       const updatedBalance = await smartAccountService.getBalance(smartAccountAddress as Address);
-      await storage.createSmartAccount({
-        address: smartAccountAddress,
-        ownerAddress,
-        balance: updatedBalance,
-        network: "monad-testnet",
-      });
+      try {
+        await storage.createSmartAccount({
+          address: smartAccountAddress,
+          ownerAddress,
+          balance: updatedBalance,
+          network: "monad-testnet",
+        });
+      } catch (e) {
+        // If storage already has it, ignore
+        console.warn("createSmartAccount storage warning:", e);
+      }
 
       // Create audit log for deployment
       await storage.createAuditLog({
@@ -167,12 +195,178 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Dashboard Stats
+  // Public config endpoint (used by client to open the app in a new tab)
+  app.get('/api/config', async (req, res) => {
+    try {
+      const publicUrl = process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`;
+      return res.json({ publicUrl });
+    } catch (err) {
+      console.error('Config endpoint error:', err);
+      return res.status(500).json({ error: 'Failed to fetch config' });
+    }
+  });
+
+  // Start monitoring (poll RPC) for one or more addresses
+  app.post('/api/monitor/start', async (req, res) => {
+    try {
+      const { addresses } = req.body as { addresses?: string[] };
+      if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+        return res.status(400).json({ error: 'addresses[] required' });
+      }
+      const { startMonitoringAddress } = await import('./monitor-service');
+      await Promise.all(addresses.filter(Boolean).map((a) => startMonitoringAddress(a)));
+      return res.json({ success: true, monitoring: addresses.length });
+    } catch (err) {
+      console.error('monitor/start error:', err);
+      return res.status(500).json({ error: 'Failed to start monitoring' });
+    }
+  });
+
+  // Ingest a specific transaction hash and create risk events from its logs
+  app.post('/api/monitor/ingest-tx', async (req, res) => {
+    try {
+      const { txHash, addresses } = req.body as { txHash?: string; addresses?: string[] };
+      if (!txHash || typeof txHash !== 'string') {
+        return res.status(400).json({ error: 'txHash required' });
+      }
+
+      const client = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
+      const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` });
+
+      const APPROVAL = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+      const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+      const addrSet = new Set((addresses || []).map((a) => a.toLowerCase()));
+      const created: any[] = [];
+
+      for (const log of receipt.logs || []) {
+        try {
+          const topic0 = log.topics?.[0];
+          if (!topic0) continue;
+          if (topic0 === APPROVAL) {
+            const owner = `0x${(log.topics?.[1] ?? '').slice(26)}`.toLowerCase();
+            const spender = `0x${(log.topics?.[2] ?? '').slice(26)}`.toLowerCase();
+            const value = BigInt(log.data ?? '0');
+            const accountAddress = addrSet.size > 0 ? ([...addrSet].find((a) => a === owner) || owner) : owner;
+
+            const whitelisted = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
+            const risk = await analyzeRisk({
+              eventType: 'approval',
+              tokenSymbol: undefined,
+              spenderAddress: spender,
+              amount: value.toString(),
+              accountAddress,
+              whitelistedAddresses: whitelisted,
+            });
+
+            const event = await storage.createRiskEvent({
+              accountAddress,
+              eventType: 'approval',
+              tokenAddress: log.address?.toLowerCase() || '',
+              tokenSymbol: undefined,
+              spenderAddress: spender,
+              amount: value.toString(),
+              riskScore: risk.score,
+              riskLevel: risk.level,
+              aiReasoning: risk.reasoning,
+              txHash: log.transactionHash || receipt.transactionHash,
+              blockNumber: String(log.blockNumber ?? receipt.blockNumber ?? 0n),
+              status: 'detected',
+            });
+
+            // Auto-revoke if enabled and high risk
+            try {
+              const settings = await storage.getUserSettings(accountAddress);
+              if (settings?.autoRevokeEnabled && risk.score > (settings.riskThreshold || 70)) {
+                const smart = await storage.getSmartAccount(accountAddress);
+                if (smart) {
+                  const result = await transactionService.executeGaslessRevoke({
+                    tokenAddress: (log.address?.toLowerCase() || '') as Address,
+                    spenderAddress: spender as Address,
+                    ownerAddress: smart.ownerAddress as Address,
+                    smartAccountAddress: accountAddress as Address,
+                  });
+                  await storage.updateRiskEventStatus(event.id, 'revoked');
+                  await storage.createAuditLog({
+                    accountAddress,
+                    action: 'revoke_approval',
+                    eventId: event.id,
+                    status: result.status === 'confirmed' ? 'success' : 'pending',
+                    details: { reason: 'Auto-revoked due to high risk score', riskScore: risk.score, gasless: true, userOpHash: result.userOpHash, blockNumber: result.blockNumber?.toString() },
+                    txHash: result.txHash,
+                  });
+                }
+              }
+            } catch (e) {
+              console.error('auto-revoke (ingest-tx) failed', e);
+            }
+
+            created.push(event);
+            const clients = wsClients.get(accountAddress);
+            if (clients) {
+              const message = JSON.stringify({ type: 'new_event', data: event });
+              clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+            }
+          } else if (topic0 === TRANSFER) {
+            const from = `0x${(log.topics?.[1] ?? '').slice(26)}`.toLowerCase();
+            const to = `0x${(log.topics?.[2] ?? '').slice(26)}`.toLowerCase();
+            const value = BigInt(log.data ?? '0');
+            const candidate = addrSet.size > 0 ? ([...addrSet].find((a) => a === from || a === to) || from) : from;
+            const accountAddress = candidate;
+
+            const whitelisted = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
+            const risk = await analyzeRisk({
+              eventType: 'transfer',
+              tokenSymbol: undefined,
+              spenderAddress: undefined,
+              amount: value.toString(),
+              accountAddress,
+              whitelistedAddresses: whitelisted,
+            });
+
+            const event = await storage.createRiskEvent({
+              accountAddress,
+              eventType: 'transfer',
+              tokenAddress: log.address?.toLowerCase() || '',
+              tokenSymbol: undefined,
+              spenderAddress: undefined,
+              amount: value.toString(),
+              riskScore: risk.score,
+              riskLevel: risk.level,
+              aiReasoning: risk.reasoning,
+              txHash: log.transactionHash || receipt.transactionHash,
+              blockNumber: String(log.blockNumber ?? receipt.blockNumber ?? 0n),
+              status: 'detected',
+            });
+
+            created.push(event);
+            const clients = wsClients.get(accountAddress);
+            if (clients) {
+              const message = JSON.stringify({ type: 'new_event', data: event });
+              clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to parse log from tx:', receipt.transactionHash, e);
+        }
+      }
+
+      return res.json({ success: true, events: created });
+    } catch (err) {
+      console.error('ingest-tx error:', err);
+      return res.status(500).json({ error: 'Failed to ingest tx' });
+    }
+  });
+
+  // Dashboard Stats (supports comma-separated addresses)
   app.get("/api/dashboard/stats/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
-      const settings = await storage.getUserSettings(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
+
+      // Use settings of the first address for whitelisted count
+      const settings = await storage.getUserSettings(addresses[0]);
 
       const stats: DashboardStats = {
         totalEvents: events.length,
@@ -188,11 +382,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Envio webhook to receive indexed events from Envio HyperIndex/HyperSync
+  // Expects JSON: { events: [ { type: 'approval'|'transfer', accountAddress, tokenAddress, tokenSymbol?, spenderAddress?, amount, txHash, blockNumber } ] }
+  app.post('/api/envio/webhook', async (req, res) => {
+    try {
+      const secret = process.env.ENVIO_WEBHOOK_SECRET;
+      const header = req.headers['x-envio-secret'] as string | undefined;
+      if (secret && header !== secret) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const payload = req.body as any;
+      if (!payload || !Array.isArray(payload.events)) {
+        return res.status(400).json({ error: 'Invalid payload' });
+      }
+
+      const created: any[] = [];
+
+      for (const ev of payload.events) {
+        try {
+          const eventType = (ev.type || ev.eventType || '').toLowerCase();
+          const accountAddress = (ev.accountAddress || ev.owner || ev.from || ev.to || ev.address || '').toLowerCase();
+          const tokenAddress = (ev.tokenAddress || ev.address || '').toLowerCase();
+          const tokenSymbol = ev.tokenSymbol || ev.symbol || null;
+          const spenderAddress = ev.spenderAddress || ev.spender || null;
+          const amount = ev.amount ? String(ev.amount) : (ev.value ? String(ev.value) : '0');
+          const txHash = ev.txHash || ev.transactionHash || ev.tx || null;
+          const blockNumber = ev.blockNumber ? String(ev.blockNumber) : (ev.block ? String(ev.block) : null);
+
+          if (!accountAddress || !tokenAddress) continue;
+
+          // run risk analysis
+          const whitelistedAddresses = ((await storage.getUserSettings(accountAddress))?.whitelistedAddresses as string[]) || [];
+          const risk = await analyzeRisk({
+            eventType: eventType === 'approval' ? 'approval' : 'transfer',
+            tokenSymbol: tokenSymbol || undefined,
+            spenderAddress: spenderAddress || undefined,
+            amount: amount,
+            accountAddress,
+            whitelistedAddresses,
+          });
+
+          // create risk event in storage
+          const insert: import('@shared/schema').InsertRiskEvent = {
+            accountAddress,
+            eventType: eventType === 'approval' ? 'approval' : 'transfer',
+            tokenAddress,
+            tokenSymbol: tokenSymbol || undefined,
+            spenderAddress: spenderAddress || undefined,
+            amount,
+            riskScore: risk.score,
+            riskLevel: risk.level,
+            aiReasoning: risk.reasoning,
+            txHash: txHash || undefined,
+            blockNumber: blockNumber || undefined,
+            status: 'detected',
+          };
+
+          const createdEvent = await storage.createRiskEvent(insert);
+
+          // broadcast via websocket
+          const clients = wsClients.get(accountAddress as string);
+          if (clients) {
+            const message = JSON.stringify({ type: 'new_event', data: createdEvent });
+            clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) client.send(message);
+            });
+          }
+
+          created.push(createdEvent);
+        } catch (err) {
+          console.error('Failed to process envio event:', err);
+        }
+      }
+
+      return res.json({ success: true, createdCount: created.length });
+    } catch (error) {
+      console.error('Envio webhook error:', error);
+      return res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  });
+
   // Risk Events Routes
   app.get("/api/events/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
       return res.json(events);
     } catch (error) {
       console.error("Events fetch error:", error);
@@ -203,7 +479,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/events/recent/:accountAddress", async (req, res) => {
     try {
       const { accountAddress } = req.params;
-      const events = await storage.getRiskEvents(accountAddress);
+      const addresses = accountAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      const events = addresses.length > 1 ? await storage.getRiskEventsFor(addresses) : await storage.getRiskEvents(addresses[0]);
       return res.json(events.slice(0, 5));
     } catch (error) {
       console.error("Recent events error:", error);
@@ -528,61 +805,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Event missing required addresses" });
       }
 
-      // Get smart account to find owner address
+      // Try smart account gasless path; if not available, fall back to client-side revoke instruction
       const smartAccount = await storage.getSmartAccount(event.accountAddress);
       if (!smartAccount) {
-        return res.status(404).json({ error: "Smart account not found" });
+        // EOA event: ask client to revoke with their wallet
+        return res.status(202).json({
+          action: 'client_revoke_required',
+          tokenAddress: event.tokenAddress,
+          spenderAddress: event.spenderAddress,
+          ownerAddress: event.accountAddress,
+        });
       }
 
       console.log(`Executing gasless revoke for event ${eventId}...`);
 
-      // Execute gasless revocation via paymaster (user doesn't pay gas!)
-      const revokeResult = await transactionService.executeGaslessRevoke({
-        tokenAddress: event.tokenAddress as Address,
-        spenderAddress: event.spenderAddress as Address,
-        ownerAddress: smartAccount.ownerAddress as Address, // EOA owner
-        smartAccountAddress: event.accountAddress as Address, // Smart account contract
-      });
-
-      // Update event status
-      await storage.updateRiskEventStatus(eventId, "revoked");
-
-      // Create audit log with real transaction
-      await storage.createAuditLog({
-        accountAddress: event.accountAddress,
-        action: "revoke_approval",
-        eventId,
-        status: revokeResult.status === "confirmed" ? "success" : "pending",
-        details: {
-          manual: true,
-          gasless: true,
-          userOpHash: revokeResult.userOpHash,
-          message: "Gasless revocation via paymaster - user paid no gas fees",
-        },
-        txHash: revokeResult.txHash,
-      });
-
-      // Broadcast update
-      const clients = wsClients.get(event.accountAddress);
-      if (clients) {
-        const message = JSON.stringify({
-          type: "event_updated",
-          data: { eventId, status: "revoked", txHash: revokeResult.txHash },
+      try {
+        const revokeResult = await transactionService.executeGaslessRevoke({
+          tokenAddress: event.tokenAddress as Address,
+          spenderAddress: event.spenderAddress as Address,
+          ownerAddress: smartAccount.ownerAddress as Address,
+          smartAccountAddress: event.accountAddress as Address,
         });
-        clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(message);
-          }
+
+        await storage.updateRiskEventStatus(eventId, "revoked");
+        await storage.createAuditLog({
+          accountAddress: event.accountAddress,
+          action: "revoke_approval",
+          eventId,
+          status: revokeResult.status === "confirmed" ? "success" : "pending",
+          details: {
+            manual: true,
+            gasless: true,
+            userOpHash: revokeResult.userOpHash,
+            message: "Gasless revocation via paymaster - user paid no gas fees",
+          },
+          txHash: revokeResult.txHash,
+        });
+
+        const clients = wsClients.get(event.accountAddress);
+        if (clients) {
+          const message = JSON.stringify({ type: "event_updated", data: { eventId, status: "revoked", txHash: revokeResult.txHash } });
+          clients.forEach((client) => { if (client.readyState === WebSocket.OPEN) client.send(message); });
+        }
+
+        return res.json({ success: true, txHash: revokeResult.txHash, userOpHash: revokeResult.userOpHash, status: revokeResult.status, gasless: true });
+      } catch (e) {
+        // Gasless not available – ask client to perform wallet-based revoke
+        return res.status(202).json({
+          action: 'client_revoke_required',
+          tokenAddress: event.tokenAddress,
+          spenderAddress: event.spenderAddress,
+          ownerAddress: smartAccount.ownerAddress,
         });
       }
-
-      return res.json({
-        success: true,
-        txHash: revokeResult.txHash,
-        userOpHash: revokeResult.userOpHash,
-        status: revokeResult.status,
-        gasless: true,
-      });
     } catch (error) {
       console.error("Revoke error:", error);
       
@@ -717,6 +992,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Audit logs error:", error);
       return res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Debug: fetch transaction and logs on-chain (useful to trace why a tx didn't surface in Envio/RPC polling)
+  app.get('/api/debug/tx/:txHash', async (req, res) => {
+    try {
+      const { txHash } = req.params;
+      const account = (req.query.account as string | undefined)?.toLowerCase();
+      const publicClient = createPublicClient({ chain: monadTestnet, transport: http(monadTestnet.rpcUrls.default.http[0]) });
+
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+
+      let logs: any[] = [];
+            if (receipt) {
+              // fetch logs for this transaction (fetch block logs then filter by transactionHash)
+              const fromBlock = BigInt(receipt.blockNumber as unknown as number);
+              const toBlock = BigInt(receipt.blockNumber as unknown as number);
+              const blockLogs = await publicClient.getLogs({
+                fromBlock,
+                toBlock,
+              } as any);
+              logs = blockLogs.filter((l) => l.transactionHash === (txHash as `0x${string}`));
+            }
+
+      // parse for Transfer/Approval topics
+      const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+      const APPROVAL_TOPIC = '0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925';
+
+      const parsed = logs.map((l) => {
+        return {
+          address: l.address,
+          topics: l.topics,
+          data: l.data,
+          logIndex: l.logIndex,
+          blockNumber: l.blockNumber,
+          isTransfer: l.topics[0] === TRANSFER_TOPIC,
+          isApproval: l.topics[0] === APPROVAL_TOPIC,
+        };
+      });
+
+      const matched = account
+        ? parsed.filter((p) => p.topics.some((t: string) => t && t.toLowerCase().includes(account.replace('0x',''))))
+        : [];
+
+      // Convert BigInt values to strings to avoid JSON serialization errors
+      const bigintToString = (input: any): any => {
+        if (typeof input === 'bigint') return input.toString();
+        if (Array.isArray(input)) return input.map(bigintToString);
+        if (input && typeof input === 'object') {
+          const out: any = {};
+          for (const k of Object.keys(input)) {
+            out[k] = bigintToString(input[k]);
+          }
+          return out;
+        }
+        return input;
+      };
+
+      return res.json({ receipt: bigintToString(receipt), logs: bigintToString(parsed), matched: bigintToString(matched) });
+    } catch (error) {
+      console.error('Debug tx endpoint error:', error);
+      return res.status(500).json({ error: error instanceof Error ? error.message : 'unknown' });
     }
   });
 

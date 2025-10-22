@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Activity, Shield, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { StatsCard } from "@/components/stats-card";
 import { RiskEventCard } from "@/components/risk-event-card";
@@ -23,15 +24,28 @@ export default function DashboardPage({
   onIgnore,
   onWhitelist,
 }: DashboardPageProps) {
-  const { connectedAddress } = useWallet();
+  const { account: connectedAddress } = useWallet();
   
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: ["/api/dashboard/stats", smartAccountAddress],
+    queryKey: ["/api/dashboard/stats", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
+    refetchInterval: 5000,
   });
 
   const { data: recentEvents, isLoading: eventsLoading } = useQuery<RiskEvent[]>({
-    queryKey: ["/api/events/recent", smartAccountAddress],
+    queryKey: ["/api/events/recent", connectedAddress ? `${smartAccountAddress},${connectedAddress}` : smartAccountAddress],
+    refetchInterval: 5000,
   });
+
+  // Start server-side monitoring for both addresses
+  useEffect(() => {
+    const addresses = [smartAccountAddress, connectedAddress].filter(Boolean) as string[];
+    if (addresses.length === 0) return;
+    fetch('/api/monitor/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addresses }),
+    }).catch(() => {});
+  }, [smartAccountAddress, connectedAddress]);
 
   // Fetch smart account details to check deployment status
   const { data: smartAccountDetails, isLoading: accountLoading } = useQuery<SmartAccount>({

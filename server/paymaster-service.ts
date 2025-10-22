@@ -6,31 +6,16 @@ import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, encodePacked, parseAbi } from "viem";
 
 // Configuration
-if (!process.env.PIMLICO_API_KEY) {
-  throw new Error(
-    "PIMLICO_API_KEY environment variable is required. " +
-    "This key enables gasless transactions via Pimlico paymaster. " +
-    "Sign up at https://www.pimlico.io/ to get your API key."
-  );
-}
-
-if (!process.env.DEPLOYER_PRIVATE_KEY) {
-  throw new Error(
-    "DEPLOYER_PRIVATE_KEY environment variable is required for signing gasless operations."
-  );
-}
-
+// Prefer Fastlane if provided, otherwise fall back to Pimlico via API key
+const FASTLANE_BUNDLER_URL = process.env.FASTLANE_BUNDLER_URL || process.env.FASTLANE_PAYMASTER_URL || "";
 const PIMLICO_API_KEY = process.env.PIMLICO_API_KEY;
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
 
-// Monad testnet chain ID
-const MONAD_CHAIN_ID = monadTestnet.id;
+if (!DEPLOYER_PRIVATE_KEY) {
+  console.warn("DEPLOYER_PRIVATE_KEY not set — gasless operations requiring signing will be disabled until configured.");
+}
 
-// Pimlico bundler URL for Monad testnet
-// Note: Pimlico may not support Monad testnet yet - we'll use a generic approach
-// For production, verify Pimlico support or use Fastlane Labs bundler for Monad
-const BUNDLER_URL = `https://api.pimlico.io/v2/${MONAD_CHAIN_ID}/rpc?apikey=${PIMLICO_API_KEY}`;
-const PAYMASTER_URL = BUNDLER_URL;
+const MONAD_CHAIN_ID = monadTestnet.id;
 
 // Public client for blockchain reads
 const publicClient = createPublicClient({
@@ -38,16 +23,28 @@ const publicClient = createPublicClient({
   transport: http(monadTestnet.rpcUrls.default.http[0]),
 });
 
-// Bundler client for submitting UserOperations
-const bundlerClient = createBundlerClient({
-  client: publicClient,
-  transport: http(BUNDLER_URL),
-});
+// Bundler and paymaster clients — try Fastlane first, then Pimlico
+let bundlerClient: any = undefined;
+let paymasterClient: any = undefined;
 
-// Paymaster client for sponsoring gas
-const paymasterClient = createPaymasterClient({
-  transport: http(PAYMASTER_URL),
-});
+try {
+  if (FASTLANE_BUNDLER_URL) {
+    bundlerClient = createBundlerClient({ client: publicClient as any, transport: http(FASTLANE_BUNDLER_URL) });
+    paymasterClient = createPaymasterClient({ transport: http(FASTLANE_BUNDLER_URL) });
+    console.log("Using Fastlane bundler/paymaster:", FASTLANE_BUNDLER_URL);
+  } else if (PIMLICO_API_KEY) {
+    const BUNDLER_URL = `https://api.pimlico.io/v2/${MONAD_CHAIN_ID}/rpc?apikey=${PIMLICO_API_KEY}`;
+    bundlerClient = createBundlerClient({ client: publicClient as any, transport: http(BUNDLER_URL) });
+    paymasterClient = createPaymasterClient({ transport: http(BUNDLER_URL) });
+    console.log("Using Pimlico bundler/paymaster");
+  } else {
+    console.warn("No bundler/paymaster configured. Set FASTLANE_BUNDLER_URL or PIMLICO_API_KEY.");
+  }
+} catch (err) {
+  console.warn("Failed to initialize bundler/paymaster clients:", err);
+  bundlerClient = undefined;
+  paymasterClient = undefined;
+}
 
 // ERC20 ABI for approve function
 const erc20Abi = parseAbi([
@@ -84,6 +81,12 @@ export class PaymasterService {
       );
 
       // Create deployer account for signing
+      if (!DEPLOYER_PRIVATE_KEY) {
+        throw new Error("DEPLOYER_PRIVATE_KEY environment variable is required to sign gasless operations at runtime.");
+      }
+      if (!bundlerClient || !paymasterClient) {
+        throw new Error("Paymaster/bundler client not configured — set FASTLANE_BUNDLER_URL or PIMLICO_API_KEY.");
+      }
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Recreate smart account object
