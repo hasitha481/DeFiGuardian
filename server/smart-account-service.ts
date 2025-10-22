@@ -5,9 +5,9 @@ import { Implementation, toMetaMaskSmartAccount } from "@metamask/delegation-too
 import { privateKeyToAccount } from "viem/accounts";
 
 // Configuration for Monad testnet with explicit RPC URL
-const publicClient = createPublicClient({
+const publicClient = viem.createPublicClient({
   chain: monadTestnet,
-  transport: http(monadTestnet.rpcUrls.default.http[0]),
+  transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
 });
 
 // Deployer account - pays gas fees for smart account deployments on Monad testnet
@@ -64,7 +64,7 @@ export class SmartAccountService {
       const walletClient = createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
-        transport: http(monadTestnet.rpcUrls.default.http[0]),
+        transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
       });
 
       // Create MetaMask smart account using Delegation Toolkit
@@ -157,7 +157,7 @@ export class SmartAccountService {
       const walletClient = createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
-        transport: http(monadTestnet.rpcUrls.default.http[0]),
+        transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
       });
 
       // Recreate smart account object to get factory args
