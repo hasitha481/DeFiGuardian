@@ -68,20 +68,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Owner address required" });
       }
 
-      // Client MUST precompute the smart account address using MetaMask
-      // Server-side creation is not supported due to MetaMask Delegation Toolkit requirements
-      if (!precomputedAddress || typeof precomputedAddress !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(precomputedAddress)) {
-        return res.status(400).json({
-          error: "Smart account address computation failed on client",
-          message: "Please ensure MetaMask is installed, unlocked, and connected to Monad Testnet"
-        });
-      }
+      // Use client-precomputed address if available, otherwise fall back to server creation
+      let smartAccountData: { address: string; ownerAddress: string; balance: string; isDeployed: boolean };
 
-      // Validate and use the client-precomputed address
-      const smartAccountData = await smartAccountService.validateSmartAccount(
-        precomputedAddress as Address,
-        ownerAddress as Address
-      );
+      if (precomputedAddress && typeof precomputedAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(precomputedAddress)) {
+        // Client successfully precomputed the address
+        smartAccountData = await smartAccountService.validateSmartAccount(
+          precomputedAddress as Address,
+          ownerAddress as Address
+        );
+      } else {
+        // Fallback: Server-side creation when client precomputation fails (e.g., in iframe)
+        try {
+          smartAccountData = await smartAccountService.createSmartAccount({ ownerAddress: ownerAddress as Address });
+        } catch (error) {
+          return res.status(500).json({
+            error: "Failed to create smart account",
+            message: error instanceof Error ? error.message : "Unknown error during smart account creation"
+          });
+        }
+      }
 
       const account = await storage.createSmartAccount({
         address: smartAccountData.address,
