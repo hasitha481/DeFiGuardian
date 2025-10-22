@@ -459,17 +459,4 @@ function AppContent() {
   );
 }
 
-export default function App() {
-  return (
-    <MetaMaskProvider>
-      <WalletProvider>
-        <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
-            <AppContent />
-            <Toaster />
-          </TooltipProvider>
-        </QueryClientProvider>
-      </WalletProvider>
-    </MetaMaskProvider>
-  );
-}
+export default AppContent;
