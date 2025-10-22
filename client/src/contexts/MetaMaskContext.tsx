@@ -26,11 +26,9 @@ export function MetaMaskProvider({ children }: MetaMaskProviderProps) {
 
   const dappUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
-    const here = window.location.origin;
-    const isBuilder = /(^|\.)builder\.io$/i.test(window.location.hostname);
-    // If embedded in Builder, prefer the public app URL to satisfy MetaMask origin checks
-    return isBuilder && publicUrl ? publicUrl : here;
-  }, [publicUrl]);
+    // MetaMask requires dappMetadata.url to match the current page origin
+    return window.location.origin;
+  }, []);
 
   const iconUrl = useMemo(() => (dappUrl ? `${dappUrl}/icon.png` : ""), [dappUrl]);
 
