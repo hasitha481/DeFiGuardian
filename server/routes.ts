@@ -62,19 +62,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Real smart account creation with Delegation Toolkit
   app.post("/api/smart-account/create", async (req, res) => {
     try {
-      const { ownerAddress } = req.body;
+      const { ownerAddress, precomputedAddress } = req.body as { ownerAddress?: string; precomputedAddress?: string };
 
       if (!ownerAddress) {
         return res.status(400).json({ error: "Owner address required" });
       }
 
-      // Note: In production, implement proper owner-to-account lookup
-      // For now, proceed with creating deterministic smart account
-
-      // Create real smart account using Delegation Toolkit
-      const smartAccountData = await smartAccountService.createSmartAccount({
-        ownerAddress,
-      });
+      // If the client precomputed the smart account address (preferred), trust-but-verify and use it
+      let smartAccountData: { address: string; ownerAddress: string; balance: string; isDeployed: boolean };
+      if (typeof precomputedAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(precomputedAddress)) {
+        const balance = await smartAccountService.getBalance(precomputedAddress as Address);
+        const isDeployed = await smartAccountService.isAccountDeployed(precomputedAddress as Address);
+        smartAccountData = {
+          address: precomputedAddress,
+          ownerAddress,
+          balance,
+          isDeployed,
+        };
+      } else {
+        // Fallback: create on server using Delegation Toolkit
+        smartAccountData = await smartAccountService.createSmartAccount({ ownerAddress });
+      }
 
       const account = await storage.createSmartAccount({
         address: smartAccountData.address,
