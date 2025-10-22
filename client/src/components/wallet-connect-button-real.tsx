@@ -102,25 +102,13 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
         }
       } catch (_) {}
 
-      // Step 3: Create smart account
-      if (!smartAccount && account) {
-        console.log("[WalletConnect] Creating smart account for:", account);
+      // Step 3: Skip smart account creation; proceed with EOA-only mode
+      if (account) {
         toast({
-          title: "Creating Smart Account",
-          description: "Setting up your MetaMask smart account with delegation capabilities...",
+          title: "Wallet Connected",
+          description: "Monitoring started for your address. You can deploy a smart account later from the dashboard.",
         });
-
-        await createSmartAccount(account);
-        console.log("[WalletConnect] Smart account created successfully");
-
-        toast({
-          title: "Smart Account Created",
-          description: "Your DeFi Guardian is now active and monitoring!",
-        });
-
         onSmartAccountCreated?.();
-      } else {
-        console.log("[WalletConnect] Smart account already exists or no account connected", { smartAccount, account });
       }
     } catch (error: any) {
       console.error("[WalletConnect] Connection error:", error);
@@ -217,14 +205,14 @@ export function WalletConnectButtonReal({ onSmartAccountCreated, compact = false
       {isLoading ? (
         <>
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          {connecting ? "Connecting MetaMask..." : 
-           isCreatingSmartAccount ? "Creating Smart Account..." :
+          {connecting ? "Connecting MetaMask..." :
+           isCreatingSmartAccount ? "Processing..." :
            "Processing..."}
         </>
       ) : (
         <>
           <Wallet className="mr-2 h-5 w-5" />
-          Connect MetaMask Smart Account
+          Connect Wallet
         </>
       )}
     </Button>
