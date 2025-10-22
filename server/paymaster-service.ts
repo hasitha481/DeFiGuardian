@@ -6,22 +6,15 @@ import { privateKeyToAccount } from "viem/accounts";
 import { keccak256, encodePacked, parseAbi } from "viem";
 
 // Configuration
-// Do not throw at import time — warn and defer runtime checks to methods
+// Prefer Fastlane if provided, otherwise fall back to Pimlico via API key
+const FASTLANE_BUNDLER_URL = process.env.FASTLANE_BUNDLER_URL || process.env.FASTLANE_PAYMASTER_URL || "";
 const PIMLICO_API_KEY = process.env.PIMLICO_API_KEY;
-if (!PIMLICO_API_KEY) {
-  console.warn("PIMLICO_API_KEY not set — gasless (paymaster) features will be disabled until configured.");
-}
-
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+
 if (!DEPLOYER_PRIVATE_KEY) {
   console.warn("DEPLOYER_PRIVATE_KEY not set — gasless operations requiring signing will be disabled until configured.");
 }
 
-// Monad testnet chain ID (defined below)
-
-// Pimlico bundler URL for Monad testnet (created only if API key is present)
-// Note: Pimlico may not support Monad testnet yet - we'll use a generic approach
-// For production, verify Pimlico support or use Fastlane Labs bundler for Monad
 const MONAD_CHAIN_ID = monadTestnet.id;
 
 // Public client for blockchain reads
@@ -30,25 +23,25 @@ const publicClient = createPublicClient({
   transport: http(monadTestnet.rpcUrls.default.http[0]),
 });
 
-// Bundler and paymaster clients are optional and only created when PIMLICO_API_KEY is set
+// Bundler and paymaster clients — try Fastlane first, then Pimlico
 let bundlerClient: any = undefined;
 let paymasterClient: any = undefined;
-if (PIMLICO_API_KEY) {
-  try {
+
+try {
+  if (FASTLANE_BUNDLER_URL) {
+    bundlerClient = createBundlerClient({ client: publicClient as any, transport: http(FASTLANE_BUNDLER_URL) });
+    paymasterClient = createPaymasterClient({ transport: http(FASTLANE_BUNDLER_URL) });
+    console.log("Using Fastlane bundler/paymaster:", FASTLANE_BUNDLER_URL);
+  } else if (PIMLICO_API_KEY) {
     const BUNDLER_URL = `https://api.pimlico.io/v2/${MONAD_CHAIN_ID}/rpc?apikey=${PIMLICO_API_KEY}`;
-    bundlerClient = createBundlerClient({
-      client: publicClient,
-      transport: http(BUNDLER_URL),
-    });
-    paymasterClient = createPaymasterClient({
-      transport: http(BUNDLER_URL),
-    });
-  } catch (err) {
-    console.warn("Failed to initialize Pimlico bundler/paymaster clients:", err);
-    bundlerClient = undefined;
-    paymasterClient = undefined;
+    bundlerClient = createBundlerClient({ client: publicClient as any, transport: http(BUNDLER_URL) });
+    paymasterClient = createPaymasterClient({ transport: http(BUNDLER_URL) });
+    console.log("Using Pimlico bundler/paymaster");
+  } else {
+    console.warn("No bundler/paymaster configured. Set FASTLANE_BUNDLER_URL or PIMLICO_API_KEY.");
   }
-} else {
+} catch (err) {
+  console.warn("Failed to initialize bundler/paymaster clients:", err);
   bundlerClient = undefined;
   paymasterClient = undefined;
 }
