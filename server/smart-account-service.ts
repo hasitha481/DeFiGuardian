@@ -1,12 +1,13 @@
 import { createPublicClient, createWalletClient, http, type Address, keccak256, encodePacked } from "viem";
+import * as viem from "viem";
 import { monadTestnet } from "../client/src/lib/chains";
 import { Implementation, toMetaMaskSmartAccount } from "@metamask/delegation-toolkit";
 import { privateKeyToAccount } from "viem/accounts";
 
 // Configuration for Monad testnet with explicit RPC URL
-const publicClient = createPublicClient({
+const publicClient = viem.createPublicClient({
   chain: monadTestnet,
-  transport: http(monadTestnet.rpcUrls.default.http[0]),
+  transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
 });
 
 // Deployer account - pays gas fees for smart account deployments on Monad testnet
@@ -17,7 +18,7 @@ if (!DEPLOYER_PRIVATE_KEY) {
 }
 
 interface CreateSmartAccountParams {
-  ownerAddress: Address;
+  ownerAddress: viem.Address;
 }
 
 interface SmartAccountResult {
@@ -28,8 +29,8 @@ interface SmartAccountResult {
 }
 
 interface DeploySmartAccountParams {
-  smartAccountAddress: Address;
-  ownerAddress: Address;
+  smartAccountAddress: viem.Address;
+  ownerAddress: viem.Address;
 }
 
 interface DeploymentResult {
@@ -49,8 +50,8 @@ export class SmartAccountService {
       const { ownerAddress } = params;
 
       // Generate deterministic salt based on owner address (CREATE2 pattern)
-      const deterministicSalt = keccak256(
-        encodePacked(['address'], [ownerAddress])
+      const deterministicSalt = viem.keccak256(
+        viem.encodePacked(['address'], [ownerAddress])
       );
 
       // Create deployer signer for creating smart account reference
@@ -60,10 +61,10 @@ export class SmartAccountService {
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for creating smart account reference
-      const walletClient = createWalletClient({
+      const walletClient = viem.createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
-        transport: http(monadTestnet.rpcUrls.default.http[0]),
+        transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
       });
 
       // Create MetaMask smart account using Delegation Toolkit
@@ -82,13 +83,13 @@ export class SmartAccountService {
       });
 
       // Check if account is already deployed
-      const isDeployed = await this.isAccountDeployed(smartAccount.address as Address);
+      const isDeployed = await this.isAccountDeployed(smartAccount.address as viem.Address);
       
       console.log(`Smart account ${smartAccount.address} created (counterfactual address). Deployed: ${isDeployed}`);
 
       // Get balance
       const balance = await publicClient.getBalance({ 
-        address: smartAccount.address as Address,
+        address: smartAccount.address as viem.Address,
       });
 
       return {
@@ -106,7 +107,7 @@ export class SmartAccountService {
   /**
    * Check if smart account exists and is deployed on-chain
    */
-  async isAccountDeployed(address: Address): Promise<boolean> {
+  async isAccountDeployed(address: viem.Address): Promise<boolean> {
     try {
       const code = await publicClient.getBytecode({ address });
       return code !== undefined && code !== '0x';
@@ -118,7 +119,7 @@ export class SmartAccountService {
   /**
    * Get balance of smart account
    */
-  async getBalance(address: Address): Promise<string> {
+  async getBalance(address: viem.Address): Promise<string> {
     try {
       const balance = await publicClient.getBalance({ address });
       return balance.toString();
@@ -142,8 +143,8 @@ export class SmartAccountService {
       }
 
       // Generate deterministic salt (same as creation)
-      const deterministicSalt = keccak256(
-        encodePacked(['address'], [ownerAddress])
+      const deterministicSalt = viem.keccak256(
+        viem.encodePacked(['address'], [ownerAddress])
       );
 
       // Create deployer account (pays gas)
@@ -153,10 +154,10 @@ export class SmartAccountService {
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
       // Create wallet client for deployment
-      const walletClient = createWalletClient({
+      const walletClient = viem.createWalletClient({
         account: deployerAccount,
         chain: monadTestnet,
-        transport: http(monadTestnet.rpcUrls.default.http[0]),
+        transport: viem.http(monadTestnet.rpcUrls.default.http[0]),
       });
 
       // Recreate smart account object to get factory args
