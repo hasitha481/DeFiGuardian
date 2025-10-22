@@ -119,7 +119,7 @@ export class SmartAccountService {
   /**
    * Get balance of smart account
    */
-  async getBalance(address: Address): Promise<string> {
+  async getBalance(address: viem.Address): Promise<string> {
     try {
       const balance = await publicClient.getBalance({ address });
       return balance.toString();
