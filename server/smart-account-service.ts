@@ -107,7 +107,7 @@ export class SmartAccountService {
   /**
    * Check if smart account exists and is deployed on-chain
    */
-  async isAccountDeployed(address: Address): Promise<boolean> {
+  async isAccountDeployed(address: viem.Address): Promise<boolean> {
     try {
       const code = await publicClient.getBytecode({ address });
       return code !== undefined && code !== '0x';
