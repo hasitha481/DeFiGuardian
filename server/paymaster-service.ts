@@ -81,14 +81,11 @@ export class PaymasterService {
       );
 
       // Create deployer account for signing
-      if (!PIMLICO_API_KEY) {
-        throw new Error("PIMLICO_API_KEY environment variable is required to perform gasless operations at runtime.");
-      }
       if (!DEPLOYER_PRIVATE_KEY) {
         throw new Error("DEPLOYER_PRIVATE_KEY environment variable is required to sign gasless operations at runtime.");
       }
       if (!bundlerClient || !paymasterClient) {
-        throw new Error("Paymaster/bundler client not configured — gasless operations are unavailable.");
+        throw new Error("Paymaster/bundler client not configured — set FASTLANE_BUNDLER_URL or PIMLICO_API_KEY.");
       }
       const deployerAccount = privateKeyToAccount(DEPLOYER_PRIVATE_KEY as `0x${string}`);
 
